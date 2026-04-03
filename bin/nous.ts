@@ -2,12 +2,14 @@
 
 import { Command } from 'commander';
 import { join } from 'node:path';
+import { writeFileSync } from 'node:fs';
 import { init } from '../src/cli/init.js';
 import { startMcpServer } from '../src/mcp/server.js';
 import { findNousDir, loadConfig } from '../src/utils/config.js';
 import { getConnection, closeConnection } from '../src/db/connection.js';
 import { KnowledgeRepository } from '../src/knowledge/repository.js';
-import type { KnowledgeType } from '../src/knowledge/types.js';
+import { RelationshipRepository } from '../src/knowledge/relationships.js';
+import type { KnowledgeType, KnowledgeStatus } from '../src/knowledge/types.js';
 
 function requireNous(): { nousDir: string; db: ReturnType<typeof getConnection>; repo: KnowledgeRepository } {
   const nousDir = findNousDir();
@@ -132,6 +134,73 @@ program
       }
     } catch {
       console.log('No results found.');
+    }
+
+    closeConnection();
+  });
+
+program
+  .command('export')
+  .description('Export brain contents')
+  .option('-f, --format <format>', 'Output format: json or markdown', 'markdown')
+  .option('-o, --output <path>', 'Output file path (defaults to stdout)')
+  .action((options: { format: string; output?: string }) => {
+    const { db, repo } = requireNous();
+    const relRepo = new RelationshipRepository(db);
+
+    const entries = repo.list({ status: 'active' as KnowledgeStatus, limit: 10000 });
+    const graph = relRepo.graph();
+
+    let output: string;
+
+    if (options.format === 'json') {
+      output = JSON.stringify({ entries, relationships: graph.edges }, null, 2);
+    } else {
+      // Markdown format
+      const sections: string[] = ['# Project Knowledge Brain\n'];
+
+      const concepts = entries.filter((e) => e.type === 'concept');
+      const decisions = entries.filter((e) => e.type === 'decision');
+      const patterns = entries.filter((e) => e.type === 'pattern');
+
+      if (concepts.length > 0) {
+        sections.push('## Concepts\n');
+        for (const c of concepts) {
+          sections.push(`### ${c.title}\n`);
+          sections.push(c.content + '\n');
+          if (c.tags.length > 0) sections.push(`*Tags: ${c.tags.join(', ')}*\n`);
+          sections.push('');
+        }
+      }
+
+      if (decisions.length > 0) {
+        sections.push('## Decisions\n');
+        for (const d of decisions) {
+          sections.push(`### ${d.title}\n`);
+          sections.push(d.content + '\n');
+          if (d.tags.length > 0) sections.push(`*Tags: ${d.tags.join(', ')}*\n`);
+          sections.push('');
+        }
+      }
+
+      if (patterns.length > 0) {
+        sections.push('## Patterns\n');
+        for (const p of patterns) {
+          sections.push(`### ${p.title}\n`);
+          sections.push(p.content + '\n');
+          if (p.tags.length > 0) sections.push(`*Tags: ${p.tags.join(', ')}*\n`);
+          sections.push('');
+        }
+      }
+
+      output = sections.join('\n');
+    }
+
+    if (options.output) {
+      writeFileSync(options.output, output);
+      console.log(`Exported to ${options.output}`);
+    } else {
+      process.stdout.write(output);
     }
 
     closeConnection();

@@ -15,6 +15,7 @@ export type {
   BrainStatus,
 } from './knowledge/types.js';
 export { KnowledgeSearch } from './knowledge/search.js';
+export { RelationshipRepository } from './knowledge/relationships.js';
 export { OpenAIEmbeddingEngine } from './embeddings/api.js';
 export { FallbackEmbeddingEngine } from './embeddings/fallback.js';
 export type { EmbeddingEngine } from './embeddings/engine.js';
