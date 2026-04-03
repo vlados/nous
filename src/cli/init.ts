@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
-import { getConnection } from '../db/connection.js';
+import { getConnection, closeConnection } from '../db/connection.js';
 import { getDefaultConfig, saveConfig } from '../utils/config.js';
 
 export interface InitOptions {
@@ -39,7 +39,7 @@ export function init(options: InitOptions = {}): string {
   // Set project name in metadata
   db.prepare('UPDATE nous_meta SET value = ? WHERE key = ?').run(projectName, 'project_name');
 
-  db.close();
+  closeConnection();
 
   // Add .gitattributes entry for binary merge strategy
   const gitattributesPath = join(cwd, '.gitattributes');
@@ -54,15 +54,44 @@ export function init(options: InitOptions = {}): string {
     writeFileSync(gitattributesPath, gitattributesEntry);
   }
 
-  // Optionally install Claude Code hook
+  // Always add MCP server config for Claude Code
+  installMcpServer(cwd);
+
+  // Optionally install auto-learning hook
   if (options.hook) {
     installClaudeCodeHook(cwd);
   }
 
-  return `nous initialized for "${projectName}" in ${nousDir}`;
+  const lines = [
+    `nous initialized for "${projectName}"`,
+    '',
+    'What was set up:',
+    `  .nous/knowledge.db     — knowledge brain (commit to git)`,
+    `  .nous/config.json      — project settings`,
+    `  .gitattributes         — binary merge strategy for .db`,
+    `  .claude/settings.json  — MCP server config for Claude Code`,
+  ];
+
+  if (options.hook) {
+    lines.push(`  .claude/settings.json  — auto-learning hook (PostToolUse)`);
+  }
+
+  lines.push('');
+  lines.push('Next steps:');
+  lines.push('  nous teach concept "How Auth Works" "JWT tokens with refresh rotation..."');
+  lines.push('  nous teach decision "Chose Redis" "For pub/sub support over Memcached"');
+  lines.push('  nous teach pattern "API Responses" "Always use ApiResponse wrapper"');
+  lines.push('');
+  lines.push('Claude Code can now query your brain via MCP automatically.');
+
+  return lines.join('\n');
 }
 
-function installClaudeCodeHook(projectDir: string): void {
+/**
+ * Add nous as an MCP server in .claude/settings.json
+ * so Claude Code can query the brain automatically.
+ */
+function installMcpServer(projectDir: string): void {
   const claudeDir = join(projectDir, '.claude');
   mkdirSync(claudeDir, { recursive: true });
 
@@ -70,15 +99,43 @@ function installClaudeCodeHook(projectDir: string): void {
   let settings: Record<string, unknown> = {};
 
   if (existsSync(settingsPath)) {
+    try {
+      const raw = readFileSync(settingsPath, 'utf-8');
+      settings = JSON.parse(raw);
+    } catch {
+      // Corrupted settings — start fresh
+    }
+  }
+
+  const mcpServers = (settings.mcpServers ?? {}) as Record<string, unknown>;
+
+  // Don't overwrite if already configured
+  if (!mcpServers.nous) {
+    mcpServers.nous = {
+      type: 'stdio',
+      command: 'npx',
+      args: ['nousdb', 'serve'],
+    };
+    settings.mcpServers = mcpServers;
+    writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+  }
+}
+
+/**
+ * Add auto-learning hook that extracts knowledge from Claude Code conversations.
+ */
+function installClaudeCodeHook(projectDir: string): void {
+  const settingsPath = join(projectDir, '.claude', 'settings.json');
+  let settings: Record<string, unknown> = {};
+
+  if (existsSync(settingsPath)) {
     const raw = readFileSync(settingsPath, 'utf-8');
     settings = JSON.parse(raw);
   }
 
-  // Add hook for auto-extraction
   const hooks = (settings.hooks ?? {}) as Record<string, unknown[]>;
   const postToolUse = (hooks.PostToolUse ?? []) as Record<string, unknown>[];
 
-  // Check if hook already exists
   const alreadyInstalled = postToolUse.some(
     (h) => JSON.stringify(h).includes('nous extract'),
   );
