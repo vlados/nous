@@ -17,7 +17,15 @@ export default defineConfig([
     format: ['esm'],
     sourcemap: true,
     target: 'node18',
-    banner: { js: '#!/usr/bin/env node' },
     external: ['better-sqlite3', 'sqlite-vec'],
+    onSuccess: async () => {
+      // Add shebang to CLI entry after build
+      const fs = await import('node:fs');
+      const path = './dist/bin/nous.js';
+      const content = fs.readFileSync(path, 'utf-8');
+      if (!content.startsWith('#!')) {
+        fs.writeFileSync(path, '#!/usr/bin/env node\n' + content);
+      }
+    },
   },
 ]);
