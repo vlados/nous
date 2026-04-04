@@ -73,7 +73,8 @@ export function init(options: InitOptions = {}): string {
   ];
 
   if (options.hook) {
-    lines.push(`  .claude/settings.json  — auto-learning hook (PostToolUse)`);
+    lines.push(`  .claude/settings.json  — auto-learning hook (Stop event)`);
+    lines.push(`  .claude/hooks/nous-extract.sh — extraction script`);
   }
 
   lines.push('');
@@ -83,13 +84,15 @@ export function init(options: InitOptions = {}): string {
   lines.push('  nous teach pattern "API Responses" "Always use ApiResponse wrapper"');
   lines.push('');
   lines.push('Claude Code can now query your brain via MCP automatically.');
+  if (!options.hook) {
+    lines.push('Run `npx nousdb init --hook` to also enable auto-learning from conversations.');
+  }
 
   return lines.join('\n');
 }
 
 /**
  * Add nous as an MCP server in .claude/settings.json
- * so Claude Code can query the brain automatically.
  */
 function installMcpServer(projectDir: string): void {
   const claudeDir = join(projectDir, '.claude');
@@ -109,7 +112,6 @@ function installMcpServer(projectDir: string): void {
 
   const mcpServers = (settings.mcpServers ?? {}) as Record<string, unknown>;
 
-  // Don't overwrite if already configured
   if (!mcpServers.nous) {
     mcpServers.nous = {
       type: 'stdio',
@@ -122,35 +124,77 @@ function installMcpServer(projectDir: string): void {
 }
 
 /**
- * Add auto-learning hook that extracts knowledge from Claude Code conversations.
+ * Install auto-learning hook that reads the conversation transcript
+ * after every Claude response and extracts knowledge.
+ *
+ * Uses the "Stop" event which fires when Claude finishes responding.
+ * The transcript_path in stdin points to the full conversation JSONL.
+ * Runs async so it doesn't block Claude.
  */
 function installClaudeCodeHook(projectDir: string): void {
-  const settingsPath = join(projectDir, '.claude', 'settings.json');
+  const claudeDir = join(projectDir, '.claude');
+  const hooksDir = join(claudeDir, 'hooks');
+  mkdirSync(hooksDir, { recursive: true });
+
+  // Create the extraction shell script
+  const scriptPath = join(hooksDir, 'nous-extract.sh');
+  const script = `#!/bin/bash
+# nous auto-learning hook — extracts knowledge from Claude Code conversations
+# Fires on "Stop" event (after every Claude response), runs async
+
+INPUT=$(cat)
+TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // empty')
+
+if [ -z "$TRANSCRIPT" ] || [ ! -f "$TRANSCRIPT" ]; then
+  exit 0
+fi
+
+# Read the last 20 conversation turns from the transcript
+RECENT=$(tail -40 "$TRANSCRIPT" 2>/dev/null | jq -r 'select(.type == "text" or .type == "assistant") | .content // .text // empty' 2>/dev/null | tail -2000)
+
+if [ -z "$RECENT" ]; then
+  exit 0
+fi
+
+# Pipe to nous extract (auto-save with lower confidence)
+echo "$RECENT" | npx nousdb extract --stdin --auto-save --source claude-code 2>/dev/null
+
+exit 0
+`;
+
+  writeFileSync(scriptPath, script, { mode: 0o755 });
+
+  // Add the Stop hook to settings.json
+  const settingsPath = join(claudeDir, 'settings.json');
   let settings: Record<string, unknown> = {};
 
   if (existsSync(settingsPath)) {
-    const raw = readFileSync(settingsPath, 'utf-8');
-    settings = JSON.parse(raw);
+    try {
+      const raw = readFileSync(settingsPath, 'utf-8');
+      settings = JSON.parse(raw);
+    } catch {}
   }
 
   const hooks = (settings.hooks ?? {}) as Record<string, unknown[]>;
-  const postToolUse = (hooks.PostToolUse ?? []) as Record<string, unknown>[];
+  const stopHooks = (hooks.Stop ?? []) as Record<string, unknown>[];
 
-  const alreadyInstalled = postToolUse.some(
-    (h) => JSON.stringify(h).includes('nous extract'),
+  const alreadyInstalled = stopHooks.some(
+    (h) => JSON.stringify(h).includes('nous-extract'),
   );
 
   if (!alreadyInstalled) {
-    postToolUse.push({
-      matcher: { tool_name: 'Write|Edit' },
+    stopHooks.push({
+      matcher: '',
       hooks: [
         {
           type: 'command',
-          command: 'nous extract --stdin --auto-save --source claude-code',
+          command: '"$CLAUDE_PROJECT_DIR"/.claude/hooks/nous-extract.sh',
+          timeout: 30,
+          async: true,
         },
       ],
     });
-    hooks.PostToolUse = postToolUse;
+    hooks.Stop = stopHooks;
     settings.hooks = hooks;
     writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
   }
