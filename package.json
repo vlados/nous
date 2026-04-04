@@ -1,6 +1,6 @@
 {
   "name": "nousdb",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Per-project knowledge brain with auto-learning from AI conversations. MCP server + SQLite + vector search.",
   "type": "module",
   "bin": {

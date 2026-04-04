@@ -1,5 +1,9 @@
 # nous
 
+[![npm version](https://img.shields.io/npm/v/nousdb.svg)](https://www.npmjs.com/package/nousdb)
+[![npm downloads](https://img.shields.io/npm/dm/nousdb.svg)](https://www.npmjs.com/package/nousdb)
+[![license](https://img.shields.io/npm/l/nousdb.svg)](https://github.com/vlados/nous/blob/main/LICENSE)
+
 Your project's brain. One command to set up. Zero config to start.
 
 ```bash
