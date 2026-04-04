@@ -70,9 +70,10 @@ program
   .option('-n, --name <name>', 'Project name (defaults to directory name)')
   .option('--hook', 'Install Claude Code hook for auto-learning')
   .option('--import', 'Auto-import knowledge from CLAUDE.md, README, .cursorrules, ADRs')
+  .option('--scan', 'Scan codebase to learn project structure')
   .option('-y, --yes', 'Skip interactive prompts, use defaults')
   .action(async (options) => {
-    const hasFlags = options.name || options.hook || options.import || options.yes;
+    const hasFlags = options.name || options.hook || options.import || options.scan || options.yes;
 
     // Interactive onboarding if no flags passed
     if (!hasFlags && process.stdin.isTTY) {
@@ -94,7 +95,27 @@ program
         console.log('  API keys saved to .nous/config.json');
       }
 
-      // Import if requested
+      // Scan codebase
+      if (answers.runScan) {
+        const { ProjectScanner } = await import('../src/scan/scanner.js');
+        const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
+        const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
+
+        const scanNousDir = findNousDir()!;
+        const scanDb = getConnection(join(scanNousDir, 'knowledge.db'));
+        const openaiKey = answers.openaiKey ?? process.env['OPENAI_API_KEY'];
+        const embeddings = openaiKey ? new OpenAIEmbeddingEngine(openaiKey) : new FallbackEmbeddingEngine();
+        const scanner = new ProjectScanner(scanDb, embeddings, answers.anthropicKey ?? undefined);
+
+        const scanResult = await scanner.scan(process.cwd(), {
+          onProgress: (msg) => console.log(`  ${msg}`),
+        });
+
+        console.log(`  Brain: ${scanResult.entriesCreated} entries from codebase scan`);
+        closeConnection();
+      }
+
+      // Import docs
       if (answers.importFiles) {
         await runImport(answers.openaiKey, answers.anthropicKey);
       }
@@ -106,6 +127,26 @@ program
     // Non-interactive mode (flags or piped stdin)
     const result = init(options);
     console.log(result);
+
+    if (options.scan) {
+      const { ProjectScanner } = await import('../src/scan/scanner.js');
+      const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
+      const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
+
+      const nd = findNousDir()!;
+      const cfg = loadConfig(nd);
+      const scanDb = getConnection(join(nd, 'knowledge.db'));
+      const oKey = cfg.openai_api_key ?? process.env['OPENAI_API_KEY'];
+      const aKey = cfg.anthropic_api_key ?? process.env['ANTHROPIC_API_KEY'];
+      const emb = oKey ? new OpenAIEmbeddingEngine(oKey) : new FallbackEmbeddingEngine();
+      const scanner = new ProjectScanner(scanDb, emb, aKey ?? undefined);
+
+      const scanResult = await scanner.scan(process.cwd(), {
+        onProgress: (msg) => console.log(`  ${msg}`),
+      });
+      console.log(`  Brain: ${scanResult.entriesCreated} entries from scan`);
+      closeConnection();
+    }
 
     if (options.import) {
       await runImport();

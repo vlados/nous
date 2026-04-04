@@ -9,6 +9,7 @@ export interface OnboardingResult {
   projectName: string;
   openaiKey: string | null;
   anthropicKey: string | null;
+  runScan: boolean;
   importFiles: boolean;
   installHook: boolean;
 }
@@ -92,12 +93,15 @@ export async function runOnboarding(): Promise<OnboardingResult> {
     console.log('  Semantic search enabled.');
   }
 
-  // 3. Import existing files (skip if already exists — they're likely imported)
+  // 3. Scan codebase + import docs (always on first init)
+  let runScan = false;
   let importFiles = false;
   if (!alreadyExists) {
+    runScan = await confirm('\n  Scan codebase to learn the project structure?', true);
+
     const sources = detectSources(cwd);
     if (sources.length > 0) {
-      console.log(`\n  Found ${sources.length} knowledge source${sources.length > 1 ? 's' : ''}:`);
+      console.log(`\n  Found ${sources.length} doc${sources.length > 1 ? 's' : ''} to import:`);
       for (const s of sources) {
         console.log(`    - ${s.name}`);
       }
@@ -115,6 +119,7 @@ export async function runOnboarding(): Promise<OnboardingResult> {
     projectName,
     openaiKey,
     anthropicKey,
+    runScan,
     importFiles,
     installHook,
   };
