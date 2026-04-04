@@ -12,34 +12,26 @@ export function init(options: InitOptions = {}): string {
   const cwd = process.cwd();
   const nousDir = join(cwd, '.nous');
 
-  if (existsSync(join(nousDir, 'knowledge.db'))) {
-    return `nous is already initialized in ${nousDir}`;
-  }
-
-  // Create .nous directory
-  mkdirSync(nousDir, { recursive: true });
-
-  // Create .gitignore for WAL/journal files
-  writeFileSync(
-    join(nousDir, '.gitignore'),
-    '*.db-wal\n*.db-shm\n*.db-journal\n',
-  );
-
-  // Determine project name
+  const alreadyExists = existsSync(join(nousDir, 'knowledge.db'));
   const projectName = options.name ?? basename(resolve(cwd));
 
-  // Create config
-  const config = getDefaultConfig(projectName);
-  saveConfig(nousDir, config);
+  if (!alreadyExists) {
+    // First-time setup: create database + config
+    mkdirSync(nousDir, { recursive: true });
 
-  // Initialize database (creates schema)
-  const dbPath = join(nousDir, 'knowledge.db');
-  const db = getConnection(dbPath);
+    writeFileSync(
+      join(nousDir, '.gitignore'),
+      '*.db-wal\n*.db-shm\n*.db-journal\n',
+    );
 
-  // Set project name in metadata
-  db.prepare('UPDATE nous_meta SET value = ? WHERE key = ?').run(projectName, 'project_name');
+    const config = getDefaultConfig(projectName);
+    saveConfig(nousDir, config);
 
-  closeConnection();
+    const dbPath = join(nousDir, 'knowledge.db');
+    const db = getConnection(dbPath);
+    db.prepare('UPDATE nous_meta SET value = ? WHERE key = ?').run(projectName, 'project_name');
+    closeConnection();
+  }
 
   // Add .gitattributes entry for binary merge strategy
   const gitattributesPath = join(cwd, '.gitattributes');
@@ -62,31 +54,30 @@ export function init(options: InitOptions = {}): string {
     installClaudeCodeHook(cwd);
   }
 
-  const lines = [
-    ``,
-    `nous initialized for "${projectName}"`,
-    '',
-    'Created:',
-    `  .nous/knowledge.db      — the brain (commit to git, share with team)`,
-    `  .nous/config.json       — settings`,
-    `  .claude/settings.json   — Claude Code will connect automatically`,
-  ];
+  const lines = [''];
 
-  if (options.hook) {
-    lines.push(`  .claude/hooks/           — auto-learning from conversations`);
-  }
-
-  lines.push('');
-  lines.push('Start Claude Code in this project — nous is ready, no extra setup.');
-  lines.push('');
-  lines.push('Teach it:');
-  lines.push('  npx nousdb teach concept "Payment Flow" "Stripe webhooks → OrderService"');
-  lines.push('  npx nousdb teach decision "Chose Redis" "For pub/sub over Memcached"');
-  lines.push('  npx nousdb teach pattern "API Responses" "Always use ApiResponse wrapper"');
-  if (!options.hook) {
+  if (alreadyExists) {
+    lines.push(`nous updated for "${projectName}"`);
     lines.push('');
-    lines.push('Want auto-learning? Run: npx nousdb init --hook');
+    lines.push('Updated:');
+    lines.push(`  .claude/settings.json   — MCP server config`);
+    if (options.hook) {
+      lines.push(`  .claude/hooks/           — auto-learning hook`);
+    }
+  } else {
+    lines.push(`nous initialized for "${projectName}"`);
+    lines.push('');
+    lines.push('Created:');
+    lines.push(`  .nous/knowledge.db      — the brain (commit to git, share with team)`);
+    lines.push(`  .nous/config.json       — settings`);
+    lines.push(`  .claude/settings.json   — Claude Code will connect automatically`);
+    if (options.hook) {
+      lines.push(`  .claude/hooks/           — auto-learning from conversations`);
+    }
   }
+
+  lines.push('');
+  lines.push('Start Claude Code in this project — nous is ready.');
 
   return lines.join('\n');
 }
