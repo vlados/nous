@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type Database from 'better-sqlite3';
@@ -303,6 +303,16 @@ export class ProjectScanner {
           // Skip files that can't be read or analyzed
         }
       }
+      // ── Layer 3: Project Understanding ────
+      // Synthesize everything into a holistic project overview
+      log('Building project understanding...');
+
+      const understandingEntries = await this.buildProjectUnderstanding(projectDir, scan);
+      for (const entry of understandingEntries) {
+        const created = this.createEntry(entry);
+        if (created) entriesCreated++;
+      }
+
     } else if (!this.anthropic) {
       log('No Anthropic API key — skipping AI analysis. Run `npx nousdb init` to configure.');
     }
@@ -448,6 +458,159 @@ export class ProjectScanner {
     if (arch.hasMonorepo) parts.push('Monorepo structure');
 
     return parts.join('\n');
+  }
+
+  /**
+   * Layer 3: Build holistic project understanding.
+   * Reads routes, models, key components and asks Claude to synthesize
+   * a complete picture of what the project is and how it works.
+   */
+  private async buildProjectUnderstanding(
+    projectDir: string,
+    scan: ProjectScan,
+  ): Promise<Array<Omit<CreateKnowledgeInput, 'source' | 'source_ref' | 'confidence'>>> {
+    if (!this.anthropic) return [];
+
+    // Gather context from key files
+    const context: string[] = [];
+
+    // Routes — full content (usually small)
+    for (const route of scan.routes) {
+      try {
+        const content = readFileSync(join(projectDir, route.file), 'utf-8');
+        context.push(`=== ${route.file} ===\n${content.slice(0, 3000)}`);
+      } catch {}
+    }
+
+    // Model names + relationships
+    const modelSummary = scan.models.map((m) => {
+      try {
+        const content = readFileSync(join(projectDir, m.path), 'utf-8');
+        const relations = this.extractModelRelations(content);
+        const fillable = content.match(/\$fillable\s*=\s*\[([\s\S]*?)\]/)?.[1] ?? '';
+        return `${m.name}: ${relations.join(', ')}${fillable ? ` | fields: ${fillable.replace(/['\s\n]/g, '').replace(/,/g, ', ')}` : ''}`;
+      } catch { return m.name; }
+    }).join('\n');
+    if (modelSummary) context.push(`=== Models ===\n${modelSummary}`);
+
+    // Livewire/Controller/Page components — read first 80 lines of each
+    const componentDirs = [
+      'app/Livewire', 'app/Http/Controllers',
+      'src/pages', 'src/app', 'pages', 'app',
+      'src/components', 'src/views',
+    ];
+    for (const dir of componentDirs) {
+      const fullDir = join(projectDir, dir);
+      if (!existsSync(fullDir)) continue;
+      try {
+        const files = readdirSync(fullDir).filter(
+          (f) => /\.(php|tsx?|jsx?|vue|svelte)$/.test(f) && !f.startsWith('.')
+        ).slice(0, 10);
+        for (const file of files) {
+          const content = readFileSync(join(fullDir, file), 'utf-8');
+          const preview = content.split('\n').slice(0, 80).join('\n');
+          context.push(`=== ${dir}/${file} ===\n${preview}`);
+        }
+      } catch {}
+      break; // Only read first matching directory
+    }
+
+    // Services / Actions — read signatures
+    for (const dir of ['app/Services', 'app/Actions', 'src/services', 'src/lib']) {
+      const fullDir = join(projectDir, dir);
+      if (!existsSync(fullDir)) continue;
+      try {
+        const files = readdirSync(fullDir).filter((f) => /\.(php|ts|js)$/.test(f)).slice(0, 8);
+        for (const file of files) {
+          const content = readFileSync(join(fullDir, file), 'utf-8');
+          context.push(`=== ${dir}/${file} ===\n${content.slice(0, 2000)}`);
+        }
+      } catch {}
+    }
+
+    // Stack summary
+    context.push(`=== Stack ===\n${this.formatStackDescription(scan.stack)}`);
+
+    const contextBlock = context.join('\n\n').slice(0, 25000); // Cap total context
+
+    try {
+      const response = await this.anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4000,
+        messages: [
+          {
+            role: 'user',
+            content: `You are analyzing a software project to build a knowledge brain. Based on the code below, produce a JSON array of knowledge entries that explain this project holistically.
+
+REQUIRED entries (create one of each):
+
+1. **Project Overview** (type: "concept") — What is this project? Who is it for? What problem does it solve? Write 2-3 sentences a new developer would read first.
+
+2. **Features** (type: "concept") — List every user-facing feature you can identify. For each, explain what it does in one sentence. Group related features.
+
+3. **How It Works** (type: "concept") — Explain the technical architecture. How do requests flow? What are the main components and how do they connect? Include the tech stack.
+
+4. **Data Model** (type: "concept") — Explain the core data entities, their relationships, and what they represent in the business domain (not just "BlogPost belongsTo BlogCategory" but "Blog posts are categorized for navigation and filtered by category on the blog page").
+
+OPTIONAL entries (only if clearly visible in the code):
+
+5. Any **decisions** you can identify from code patterns, comments, or config choices (type: "decision")
+
+6. Any **patterns** or conventions the codebase follows (type: "pattern")
+
+7. Individual **feature deep-dives** for complex features (type: "concept")
+
+Return JSON array:
+[{"type":"concept","title":"Project Overview","content":"...","tags":["overview"],"scope":""}]
+
+Rules:
+- Write for a developer who has never seen this codebase
+- Be specific — use actual class names, routes, and file paths
+- Content should be standalone — readable without the source code
+- Title max 60 chars
+- Return ONLY the JSON array, no markdown fences
+
+${contextBlock}`,
+          },
+        ],
+      });
+
+      const text = response.content[0]?.type === 'text' ? response.content[0].text : '';
+      const cleaned = text.trim().replace(/^```json?\n?/, '').replace(/\n?```$/, '').trim();
+
+      try {
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed)) {
+          return parsed.map((e: any) => ({
+            type: e.type ?? 'concept',
+            title: e.title ?? 'Unknown',
+            content: e.content ?? '',
+            tags: [...(e.tags ?? []), 'project-understanding'],
+            scope: e.scope ?? '',
+          }));
+        }
+      } catch {
+        const match = cleaned.match(/\[[\s\S]*\]/);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[0]);
+            if (Array.isArray(parsed)) {
+              return parsed.map((e: any) => ({
+                type: e.type ?? 'concept',
+                title: e.title ?? 'Unknown',
+                content: e.content ?? '',
+                tags: [...(e.tags ?? []), 'project-understanding'],
+                scope: e.scope ?? '',
+              }));
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.warn(`[nous] Project understanding failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    return [];
   }
 
   /** Extract relationship method names from a PHP/TS model file. */
