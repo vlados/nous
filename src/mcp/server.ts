@@ -24,9 +24,10 @@ export function createMcpServer(): { server: McpServer; cleanup: () => void } {
   const repo = new KnowledgeRepository(db);
 
   // Initialize embedding engine
-  const apiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
-  const embeddings: EmbeddingEngine = apiKey
-    ? new OpenAIEmbeddingEngine(apiKey)
+  const openaiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+  const anthropicKey = config.anthropic_api_key ?? process.env['ANTHROPIC_API_KEY'];
+  const embeddings: EmbeddingEngine = openaiKey
+    ? new OpenAIEmbeddingEngine(openaiKey)
     : new FallbackEmbeddingEngine();
   const search = new KnowledgeSearch(db, embeddings);
 
@@ -317,59 +318,37 @@ export function createMcpServer(): { server: McpServer; cleanup: () => void } {
   // ── Tool 8: nous_extract ────────────────────────────────────
   server.tool(
     'nous_extract',
-    'Extract knowledge from conversation text. Identifies concepts, decisions, and patterns using heuristic classification.',
+    'Extract knowledge from conversation text. Uses AI (Claude) when available, falls back to heuristic patterns.',
     {
       text: z.string().describe('Conversation text to extract knowledge from'),
       source: z.string().optional().default('mcp').describe('Source identifier'),
-      auto_save: z.boolean().optional().default(false).describe('Automatically save extracted knowledge (with lower confidence)'),
+      auto_save: z.boolean().optional().default(true).describe('Automatically save extracted knowledge'),
     },
     async ({ text, source, auto_save }) => {
-      // Simple heuristic extraction (Phase 4 will have full classifier)
-      const extracted: { type: KnowledgeType; title: string; content: string }[] = [];
+      const { KnowledgeExtractor } = await import('../extraction/extractor.js');
+      const extractor = new KnowledgeExtractor(db, embeddings, anthropicKey ?? undefined);
 
-      const sentences = text.split(/[.!?\n]+/).map((s) => s.trim()).filter((s) => s.length > 20);
+      const result = await extractor.extract(text, {
+        source: 'extracted',
+        sourceRef: source,
+        autoSave: auto_save,
+      });
 
-      for (const sentence of sentences) {
-        const lower = sentence.toLowerCase();
-        if (/\b(we chose|decided to|because|opted for|tradeoff|instead of)\b/.test(lower)) {
-          extracted.push({ type: 'decision', title: sentence.slice(0, 60), content: sentence });
-        } else if (/\b(works by|the flow is|architecture|responsible for|handles|connects to)\b/.test(lower)) {
-          extracted.push({ type: 'concept', title: sentence.slice(0, 60), content: sentence });
-        } else if (/\b(always|never|convention|rule|pattern|make sure)\b/.test(lower)) {
-          extracted.push({ type: 'pattern', title: sentence.slice(0, 60), content: sentence });
-        }
+      if (result.saved.length > 0) {
+        const lines = result.saved.map((e) => `[${e.type}] ${e.title} (${e.id})`);
+        return {
+          content: [{ type: 'text' as const, text: `Extracted ${result.saved.length} entries (${result.method}):\n${lines.join('\n')}` }],
+        };
       }
 
-      if (extracted.length === 0) {
-        return { content: [{ type: 'text' as const, text: 'No knowledge extracted from the provided text.' }] };
+      if (result.proposed.length > 0) {
+        const lines = result.proposed.map((e) => `[${e.type}] ${e.title}`);
+        return {
+          content: [{ type: 'text' as const, text: `Found ${result.proposed.length} entries (${result.method}):\n${lines.join('\n')}\n\nCall with auto_save=true to save.` }],
+        };
       }
 
-      if (auto_save) {
-        const saved: string[] = [];
-        for (const item of extracted) {
-          const entry = repo.insert({
-            ...item,
-            source: 'extracted',
-            source_ref: source,
-            confidence: 0.6,
-          });
-          if (embeddings.isAvailable()) {
-            const vec = await embeddings.embed(`${item.title} ${item.content}`);
-            if (vec) search.storeEmbedding(entry.id, vec, embeddings.modelName());
-          }
-          saved.push(`[${entry.type}] ${entry.title} (${entry.id})`);
-        }
-        return { content: [{ type: 'text' as const, text: `Auto-saved ${saved.length} entries:\n${saved.join('\n')}` }] };
-      }
-
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: `Found ${extracted.length} potential entries:\n${extracted.map((e) => `[${e.type}] ${e.title}`).join('\n')}\n\nCall nous_teach to save them, or nous_extract with auto_save=true.`,
-          },
-        ],
-      };
+      return { content: [{ type: 'text' as const, text: 'No knowledge extracted.' }] };
     },
   );
 

@@ -6,6 +6,7 @@ export interface NousConfig {
   embedding_model: string;
   embedding_dimensions: number;
   openai_api_key?: string;
+  anthropic_api_key?: string;
   auto_extract: boolean;
   extraction_confidence: number;
 }

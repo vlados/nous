@@ -23,7 +23,7 @@ function requireNous(): { nousDir: string; db: ReturnType<typeof getConnection>;
   return { nousDir, db, repo };
 }
 
-async function runImport(apiKeyOverride?: string | null): Promise<void> {
+async function runImport(openaiKeyOverride?: string | null, anthropicKeyOverride?: string | null): Promise<void> {
   const { KnowledgeImporter } = await import('../src/import/importer.js');
   const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
   const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
@@ -33,8 +33,8 @@ async function runImport(apiKeyOverride?: string | null): Promise<void> {
 
   const config = loadConfig(nousDir);
   const db = getConnection(join(nousDir, 'knowledge.db'));
-  const apiKey = apiKeyOverride ?? config.openai_api_key ?? process.env['OPENAI_API_KEY'];
-  const embeddings = apiKey ? new OpenAIEmbeddingEngine(apiKey) : new FallbackEmbeddingEngine();
+  const openaiKey = openaiKeyOverride ?? config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+  const embeddings = openaiKey ? new OpenAIEmbeddingEngine(openaiKey) : new FallbackEmbeddingEngine();
   const importer = new KnowledgeImporter(db, embeddings);
 
   console.log('\n  Importing existing knowledge...');
@@ -84,20 +84,19 @@ program
       const result = init({ name: answers.projectName, hook: answers.installHook });
       console.log(result);
 
-      // Save API key to config if provided
-      if (answers.apiKey) {
-        const nd = findNousDir();
-        if (nd) {
-          const cfg = loadCfg(nd);
-          cfg.openai_api_key = answers.apiKey;
-          saveConfig(nd, cfg);
-          console.log('  API key saved to .nous/config.json');
-        }
+      // Save API keys to config
+      const nd = findNousDir();
+      if (nd && (answers.openaiKey || answers.anthropicKey)) {
+        const cfg = loadCfg(nd);
+        if (answers.openaiKey) cfg.openai_api_key = answers.openaiKey;
+        if (answers.anthropicKey) cfg.anthropic_api_key = answers.anthropicKey;
+        saveConfig(nd, cfg);
+        console.log('  API keys saved to .nous/config.json');
       }
 
       // Import if requested
       if (answers.importFiles) {
-        await runImport(answers.apiKey);
+        await runImport(answers.openaiKey, answers.anthropicKey);
       }
 
       console.log('\n  Done. Start Claude Code in this project — nous is ready.\n');
@@ -209,6 +208,9 @@ program
     const config = loadConfig(nousDir);
     const stats = repo.status();
 
+    const hasAnthropic = !!(config.anthropic_api_key ?? process.env['ANTHROPIC_API_KEY']);
+    const hasOpenai = !!(config.openai_api_key ?? process.env['OPENAI_API_KEY']);
+
     console.log(`\nnous brain: ${config.project_name}`);
     console.log('─────────────────────────────');
     console.log(`Entries:       ${stats.total_entries}`);
@@ -217,6 +219,8 @@ program
     console.log(`  Patterns:    ${stats.by_type.pattern}`);
     console.log(`Relationships: ${stats.total_relationships}`);
     console.log(`Embeddings:    ${stats.total_embeddings} (${Math.round(stats.embedding_coverage * 100)}% coverage)`);
+    console.log(`Extraction:    ${hasAnthropic ? 'AI (Claude Haiku)' : 'heuristic (regex)'}`);
+    console.log(`Search:        ${hasOpenai ? 'hybrid (keyword + semantic)' : 'keyword only'}`);
     console.log(`Last activity: ${stats.last_activity ?? 'none'}`);
 
     closeConnection();
@@ -375,9 +379,10 @@ program
     const { nousDir, db } = requireNous();
     const config = loadConfig(nousDir);
 
-    const apiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
-    const embeddings = apiKey ? new OpenAIEmbeddingEngine(apiKey) : new FallbackEmbeddingEngine();
-    const extractor = new KnowledgeExtractor(db, embeddings);
+    const openaiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+    const anthropicKey = config.anthropic_api_key ?? process.env['ANTHROPIC_API_KEY'];
+    const embeddings = openaiKey ? new OpenAIEmbeddingEngine(openaiKey) : new FallbackEmbeddingEngine();
+    const extractor = new KnowledgeExtractor(db, embeddings, anthropicKey ?? undefined);
 
     let text = '';
     if (options.stdin) {
@@ -405,7 +410,7 @@ program
     });
 
     if (result.saved.length > 0) {
-      console.log(`Saved ${result.saved.length} entries:`);
+      console.log(`Saved ${result.saved.length} entries (via ${result.method}):`);
       for (const entry of result.saved) {
         console.log(`  [${entry.type}] ${entry.title} (${entry.id})`);
       }
