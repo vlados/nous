@@ -40,8 +40,12 @@ export function startVizServer(port: number = 4200): { url: string; close: () =>
     }
   }
 
-  // Inject project name into HTML
-  html = html.replace('{{PROJECT_NAME}}', config.project_name || 'nous');
+  // Inject project name and config into HTML
+  const projectName = config.project_name || 'nous';
+  const hasEmbeddings = embeddings.isAvailable();
+  html = html.replaceAll('{{PROJECT_NAME}}', projectName);
+  html = html.replace('{{HAS_EMBEDDINGS}}', String(hasEmbeddings));
+  html = html.replace('{{EMBEDDING_MODEL}}', hasEmbeddings ? embeddings.modelName() : 'none');
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? '/';

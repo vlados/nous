@@ -400,6 +400,42 @@
     height: 8px;
     border-radius: 50%;
   }
+
+  /* ── Embedding banner ──────────────────── */
+  .banner {
+    padding: 10px 16px;
+    font-size: 12px;
+    line-height: 1.5;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .banner.warning {
+    background: rgba(240, 164, 41, 0.08);
+    border-bottom-color: rgba(240, 164, 41, 0.2);
+    color: var(--text1);
+  }
+
+  .banner.ok {
+    background: rgba(45, 212, 176, 0.06);
+    border-bottom-color: rgba(45, 212, 176, 0.15);
+    color: var(--text2);
+  }
+
+  .banner code {
+    background: var(--bg3);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text0);
+  }
+
+  .banner a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .banner a:hover { text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -426,6 +462,7 @@
 </div>
 
 <div id="sidebar">
+  <div id="embedding-banner"></div>
   <div class="sidebar-section">
     <h3>Filter</h3>
     <div class="filters">
@@ -450,11 +487,30 @@
 
 <script>
 const TYPE_COLORS = { concept: '#4d9de0', decision: '#f0a429', pattern: '#2dd4b0' };
+const HAS_EMBEDDINGS = {{HAS_EMBEDDINGS}};
+const EMBEDDING_MODEL = '{{EMBEDDING_MODEL}}';
 
 let allData = { nodes: [], edges: [] };
 let simulation, svg, g, nodeElements, linkElements, labelElements;
 let selectedId = null;
 let activeFilter = 'all';
+
+// ── Embedding banner ────────────────────────
+function renderEmbeddingBanner(stats) {
+  const banner = document.getElementById('embedding-banner');
+  if (HAS_EMBEDDINGS) {
+    const coverage = stats.total_entries > 0 ? Math.round(stats.embedding_coverage * 100) : 0;
+    banner.innerHTML = `<div class="banner ok">Semantic search active — <code>${EMBEDDING_MODEL}</code> (${coverage}% coverage)</div>`;
+  } else {
+    banner.innerHTML = `
+      <div class="banner warning">
+        Semantic search disabled — keyword search only.<br>
+        For full AI-powered search, set your API key:<br>
+        <code>export OPENAI_API_KEY=sk-...</code><br>
+        or add <code>"openai_api_key"</code> to <code>.nous/config.json</code>
+      </div>`;
+  }
+}
 
 // ── Fetch data ──────────────────────────────
 async function fetchData() {
@@ -467,6 +523,7 @@ async function fetchData() {
 
   allData = graph;
   renderStats(stats);
+  renderEmbeddingBanner(stats);
   renderEntryList(graph.nodes);
   renderGraph(graph);
 }
