@@ -27,12 +27,12 @@ This creates:
 
 ```
 .nous/knowledge.db        ← the brain (commit to git, share with team)
-.claude/settings.json     ← MCP server + auto-learning hook
+.claude/settings.json     ← Claude Code connects automatically
 ```
 
-**Done.** Claude Code can now query the brain and learns from your conversations automatically.
+**Done.** Just start Claude Code normally — nous is already connected. No server to run, no extra terminal.
 
-> Without `--hook`, you get just the MCP server (query only, no auto-learning).
+> Without `--hook`, you get query-only (no auto-learning).
 > Without Claude Code, you can still use the CLI to teach and search.
 
 ## How it works
@@ -142,20 +142,22 @@ After `init`, Claude Code (or any MCP client) gets these tools:
 
 ### Manual MCP setup (if not using `init`)
 
-Add to `.claude/settings.json` or use the CLI:
-
 ```bash
 claude mcp add nous -- npx nousdb serve
 ```
 
+> You never need to run `nous serve` yourself. Claude Code starts it automatically in the background via the config in `.claude/settings.json`.
+
 ## CLI reference
 
 ```bash
-npx nousdb init [--name <name>] [--hook]   # Set up nous in your project
-npx nousdb serve                            # Start MCP server (stdio)
+npx nousdb init                             # Interactive setup wizard
+npx nousdb init --import --hook             # Non-interactive, all features
 npx nousdb status                           # Brain statistics
 npx nousdb teach <type> <title> <content>   # Add knowledge
 npx nousdb ask <question>                   # Search the brain
+npx nousdb import [file]                    # Import from CLAUDE.md, README, ADRs
+npx nousdb viz                              # Open brain visualization in browser
 npx nousdb export [--format json|markdown]  # Export for backup or docs
 npx nousdb extract --stdin [--auto-save]    # Extract knowledge from piped text
 ```
@@ -177,11 +179,11 @@ The classifier uses ~30 regex patterns (no LLM calls, zero cost, <10ms). It's in
 ```
 your-project/
 ├── .nous/
-│   ├── knowledge.db      ← SQLite + sqlite-vec + FTS5 (commit this)
-│   ├── config.json       ← project settings (commit this)
+│   ├── knowledge.db      ← the brain (commit this)
+│   ├── config.json       ← settings + API key (commit this)
 │   └── .gitignore        ← excludes WAL/journal files
 ├── .claude/
-│   ├── settings.json     ← MCP server + hook config
+│   ├── settings.json     ← Claude Code auto-connects (no manual server needed)
 │   └── hooks/
 │       └── nous-extract.sh  ← auto-learning script (with --hook)
 └── .gitattributes        ← binary merge strategy for .db

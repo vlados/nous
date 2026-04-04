@@ -23,6 +23,40 @@ function requireNous(): { nousDir: string; db: ReturnType<typeof getConnection>;
   return { nousDir, db, repo };
 }
 
+async function runImport(apiKeyOverride?: string | null): Promise<void> {
+  const { KnowledgeImporter } = await import('../src/import/importer.js');
+  const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
+  const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
+
+  const nousDir = findNousDir();
+  if (!nousDir) return;
+
+  const config = loadConfig(nousDir);
+  const db = getConnection(join(nousDir, 'knowledge.db'));
+  const apiKey = apiKeyOverride ?? config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+  const embeddings = apiKey ? new OpenAIEmbeddingEngine(apiKey) : new FallbackEmbeddingEngine();
+  const importer = new KnowledgeImporter(db, embeddings);
+
+  console.log('\n  Importing existing knowledge...');
+  const results = await importer.importAll(process.cwd());
+
+  let totalImported = 0;
+  for (const r of results) {
+    if (r.imported > 0) {
+      console.log(`    ${r.source}: ${r.imported} entries`);
+      totalImported += r.imported;
+    }
+  }
+
+  if (totalImported === 0) {
+    console.log('    No importable files found.');
+  } else {
+    console.log(`\n  Imported ${totalImported} entries.`);
+  }
+
+  closeConnection();
+}
+
 const program = new Command();
 
 program
@@ -36,45 +70,46 @@ program
   .option('-n, --name <name>', 'Project name (defaults to directory name)')
   .option('--hook', 'Install Claude Code hook for auto-learning')
   .option('--import', 'Auto-import knowledge from CLAUDE.md, README, .cursorrules, ADRs')
+  .option('-y, --yes', 'Skip interactive prompts, use defaults')
   .action(async (options) => {
+    const hasFlags = options.name || options.hook || options.import || options.yes;
+
+    // Interactive onboarding if no flags passed
+    if (!hasFlags && process.stdin.isTTY) {
+      const { runOnboarding } = await import('../src/cli/onboarding.js');
+      const { saveConfig, loadConfig: loadCfg } = await import('../src/utils/config.js');
+      const answers = await runOnboarding();
+
+      // Run init with answers
+      const result = init({ name: answers.projectName, hook: answers.installHook });
+      console.log(result);
+
+      // Save API key to config if provided
+      if (answers.apiKey) {
+        const nd = findNousDir();
+        if (nd) {
+          const cfg = loadCfg(nd);
+          cfg.openai_api_key = answers.apiKey;
+          saveConfig(nd, cfg);
+          console.log('  API key saved to .nous/config.json');
+        }
+      }
+
+      // Import if requested
+      if (answers.importFiles) {
+        await runImport(answers.apiKey);
+      }
+
+      console.log('\n  Done. Start Claude Code in this project — nous is ready.\n');
+      return;
+    }
+
+    // Non-interactive mode (flags or piped stdin)
     const result = init(options);
     console.log(result);
 
     if (options.import) {
-      const { KnowledgeImporter } = await import('../src/import/importer.js');
-      const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
-      const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
-
-      const nousDir = findNousDir();
-      if (!nousDir) return;
-
-      const config = loadConfig(nousDir);
-      const db = getConnection(join(nousDir, 'knowledge.db'));
-      const apiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
-      const embeddings = apiKey ? new OpenAIEmbeddingEngine(apiKey) : new FallbackEmbeddingEngine();
-      const importer = new KnowledgeImporter(db, embeddings);
-
-      console.log('\nImporting existing knowledge...');
-      const results = await importer.importAll(process.cwd());
-
-      let totalImported = 0;
-      for (const r of results) {
-        if (r.imported > 0) {
-          console.log(`  ${r.source}: ${r.imported} entries imported`);
-          for (const e of r.entries) {
-            console.log(`    [${e.type}] ${e.title}`);
-          }
-          totalImported += r.imported;
-        }
-      }
-
-      if (totalImported === 0) {
-        console.log('  No importable files found (CLAUDE.md, README.md, .cursorrules, ADRs)');
-      } else {
-        console.log(`\nImported ${totalImported} entries total.`);
-      }
-
-      closeConnection();
+      await runImport();
     }
   });
 
