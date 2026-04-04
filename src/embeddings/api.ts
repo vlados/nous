@@ -5,6 +5,8 @@ import { EMBEDDING_DIMENSIONS } from '../db/schema.js';
 export class OpenAIEmbeddingEngine implements EmbeddingEngine {
   private client: OpenAI | null = null;
   private apiKey: string | null;
+  private disabled = false;
+  private errorLogged = false;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey ?? process.env['OPENAI_API_KEY'] ?? null;
@@ -14,7 +16,7 @@ export class OpenAIEmbeddingEngine implements EmbeddingEngine {
   }
 
   isAvailable(): boolean {
-    return this.client !== null;
+    return this.client !== null && !this.disabled;
   }
 
   modelName(): string {
@@ -26,7 +28,7 @@ export class OpenAIEmbeddingEngine implements EmbeddingEngine {
   }
 
   async embed(text: string): Promise<Float32Array | null> {
-    if (!this.client) return null;
+    if (!this.client || this.disabled) return null;
 
     try {
       const response = await this.client.embeddings.create({
@@ -38,12 +40,18 @@ export class OpenAIEmbeddingEngine implements EmbeddingEngine {
       const embedding = response.data[0]?.embedding;
       if (!embedding) return null;
 
+      // Reset error state on success
+      this.errorLogged = false;
       return new Float32Array(embedding);
     } catch (err) {
-      // Circuit breaker: degrade gracefully on API errors
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes('429') || message.includes('5')) {
-        console.warn(`[nous] Embedding API error, falling back to FTS5: ${message}`);
+        // Circuit breaker: disable after first failure, log once
+        this.disabled = true;
+        if (!this.errorLogged) {
+          this.errorLogged = true;
+          console.warn(`[nous] Embedding API unavailable, using FTS5 keyword search only.`);
+        }
         return null;
       }
       throw err;

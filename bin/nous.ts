@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { writeFileSync } from 'node:fs';
 import { init } from '../src/cli/init.js';
 import { startMcpServer } from '../src/mcp/server.js';
+import { startVizServer } from '../src/viz/server.js';
 import { findNousDir, loadConfig } from '../src/utils/config.js';
 import { getConnection, closeConnection } from '../src/db/connection.js';
 import { KnowledgeRepository } from '../src/knowledge/repository.js';
@@ -34,9 +35,109 @@ program
   .description('Initialize nous in the current project')
   .option('-n, --name <name>', 'Project name (defaults to directory name)')
   .option('--hook', 'Install Claude Code hook for auto-learning')
-  .action((options) => {
+  .option('--import', 'Auto-import knowledge from CLAUDE.md, README, .cursorrules, ADRs')
+  .action(async (options) => {
     const result = init(options);
     console.log(result);
+
+    if (options.import) {
+      const { KnowledgeImporter } = await import('../src/import/importer.js');
+      const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
+      const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
+
+      const nousDir = findNousDir();
+      if (!nousDir) return;
+
+      const config = loadConfig(nousDir);
+      const db = getConnection(join(nousDir, 'knowledge.db'));
+      const apiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+      const embeddings = apiKey ? new OpenAIEmbeddingEngine(apiKey) : new FallbackEmbeddingEngine();
+      const importer = new KnowledgeImporter(db, embeddings);
+
+      console.log('\nImporting existing knowledge...');
+      const results = await importer.importAll(process.cwd());
+
+      let totalImported = 0;
+      for (const r of results) {
+        if (r.imported > 0) {
+          console.log(`  ${r.source}: ${r.imported} entries imported`);
+          for (const e of r.entries) {
+            console.log(`    [${e.type}] ${e.title}`);
+          }
+          totalImported += r.imported;
+        }
+      }
+
+      if (totalImported === 0) {
+        console.log('  No importable files found (CLAUDE.md, README.md, .cursorrules, ADRs)');
+      } else {
+        console.log(`\nImported ${totalImported} entries total.`);
+      }
+
+      closeConnection();
+    }
+  });
+
+program
+  .command('import [file]')
+  .description('Import knowledge from project files. Without args: auto-detect CLAUDE.md, README, .cursorrules, ADRs. With file: import specific file.')
+  .option('-t, --type <type>', 'File type hint: claude-md, readme, cursorrules, adr, generic-md')
+  .action(async (file?: string, options?: { type?: string }) => {
+    const { KnowledgeImporter } = await import('../src/import/importer.js');
+    const { detectSources } = await import('../src/import/sources.js');
+    const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
+    const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
+
+    const { nousDir, db } = requireNous();
+    const config = loadConfig(nousDir);
+    const apiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+    const embeddings = apiKey ? new OpenAIEmbeddingEngine(apiKey) : new FallbackEmbeddingEngine();
+    const importer = new KnowledgeImporter(db, embeddings);
+
+    if (file) {
+      // Import specific file
+      const result = await importer.importFile(file, options?.type as any);
+      if (result.imported > 0) {
+        console.log(`Imported ${result.imported} entries from ${file}:`);
+        for (const e of result.entries) {
+          console.log(`  [${e.type}] ${e.title}`);
+        }
+      } else {
+        console.log(`No new knowledge extracted from ${file}. (${result.skipped} duplicates skipped)`);
+      }
+    } else {
+      // Auto-detect and import all
+      const sources = detectSources(process.cwd());
+      if (sources.length === 0) {
+        console.log('No importable files found (CLAUDE.md, README.md, .cursorrules, docs/adr/)');
+        closeConnection();
+        return;
+      }
+
+      console.log(`Found ${sources.length} sources:`);
+      for (const s of sources) {
+        console.log(`  ${s.name} (${s.path})`);
+      }
+      console.log('');
+
+      const results = await importer.importAll(process.cwd());
+      let total = 0;
+      for (const r of results) {
+        if (r.imported > 0) {
+          console.log(`${r.source}: ${r.imported} entries`);
+          for (const e of r.entries) {
+            console.log(`  [${e.type}] ${e.title}`);
+          }
+          total += r.imported;
+        } else if (r.skipped > 0) {
+          console.log(`${r.source}: ${r.skipped} already imported`);
+        }
+      }
+
+      console.log(`\nTotal: ${total} new entries imported.`);
+    }
+
+    closeConnection();
   });
 
 program
@@ -44,6 +145,25 @@ program
   .description('Start the MCP server (stdio transport)')
   .action(async () => {
     await startMcpServer();
+  });
+
+program
+  .command('viz')
+  .description('Open the brain visualization in your browser')
+  .option('-p, --port <port>', 'Port number', '4200')
+  .option('--no-open', 'Do not open browser automatically')
+  .action(async (options: { port: string; open: boolean }) => {
+    const port = parseInt(options.port, 10);
+    const { url } = startVizServer(port);
+    console.log(`\nnous brain visualization: ${url}\n`);
+
+    if (options.open) {
+      const { exec } = await import('node:child_process');
+      const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      exec(`${cmd} ${url}`);
+    }
+
+    console.log('Press Ctrl+C to stop.\n');
   });
 
 program

@@ -1,153 +1,190 @@
 # nous
 
-Per-project knowledge brain with auto-learning from AI conversations.
-
-**nous** (Greek for "mind") stores everything a developer needs to know about a project — how things work, why decisions were made, and what patterns to follow — in a single SQLite file that lives in your repo.
-
-Any AI tool can query it via MCP. Knowledge is auto-extracted from Claude Code conversations.
-
-## Quick Start
-
-```bash
-# Initialize in your project
-npx nousdb init --name "my-project"
-
-# Start the MCP server (add to Claude Code / Cursor)
-npx nousdb serve
-
-# Teach it something
-npx nousdb teach concept "Payment Flow" "Stripe webhooks hit PaymentController, which dispatches to OrderService"
-npx nousdb teach decision "Chose SQLite" "Portability over scale — the brain file lives in git"
-npx nousdb teach pattern "API Responses" "Always use ApiResponse wrapper, never return raw arrays"
-
-# Search
-npx nousdb ask "how do payments work"
-
-# See brain stats
-npx nousdb status
-```
-
-## Three Knowledge Types
-
-| Type | What it captures | Example |
-|------|-----------------|---------|
-| **concept** | How something works | "The auth system uses JWT with refresh rotation" |
-| **decision** | Why something was chosen | "We chose Redis over Memcached for pub/sub support" |
-| **pattern** | When/always/never rules | "Always use wire:navigate for Livewire navigation" |
-
-## MCP Integration
-
-Add nous to your Claude Code or Cursor config:
-
-```json
-{
-  "mcpServers": {
-    "nous": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["nousdb", "serve"]
-    }
-  }
-}
-```
-
-### 10 MCP Tools
-
-| Tool | What it does |
-|------|-------------|
-| `nous_query` | Hybrid search (keyword + semantic + RRF reranking) |
-| `nous_teach` | Add new knowledge |
-| `nous_recall` | Get entry by ID or title |
-| `nous_update` | Update existing entry |
-| `nous_relate` | Create/query relationships between entries |
-| `nous_forget` | Deprecate or delete entries |
-| `nous_context` | Get all relevant knowledge for a task (concepts + decisions + patterns) |
-| `nous_extract` | Extract knowledge from conversation text |
-| `nous_recent` | Recently added/modified entries |
-| `nous_status` | Brain stats and health |
-
-## Auto-Learning from AI Conversations
-
-The killer feature. Initialize with the `--hook` flag to add a Claude Code hook:
+Your project's brain. One command to set up. Zero config to start.
 
 ```bash
 npx nousdb init --hook
 ```
 
-This adds a `PostToolUse` hook that watches Write/Edit operations and auto-extracts decisions, concepts, and patterns from conversations. Knowledge is stored with `confidence: 0.6` and `source: extracted`.
+That's it. Your AI assistant now has a persistent memory for this project — it learns from your conversations and remembers how things work.
 
-You can also pipe text manually:
+---
+
+## What is this?
+
+Every project has knowledge that lives in developers' heads: *how the payment flow works*, *why we chose Redis over Memcached*, *the rule about never pushing to main*. This knowledge gets lost between sessions, forgotten by new team members, and never reaches your AI tools.
+
+**nous** fixes that. It's a single SQLite file (`.nous/knowledge.db`) that stores your project's knowledge and makes it queryable by any AI via [MCP](https://modelcontextprotocol.io).
+
+## 30-second setup
 
 ```bash
-echo "We decided to use SQLite because portability matters" | npx nousdb extract --stdin --auto-save
+cd your-project
+npx nousdb init --hook
 ```
 
-## How Search Works
+This creates:
 
-nous uses **hybrid search** combining three strategies:
+```
+.nous/knowledge.db        ← the brain (commit to git, share with team)
+.claude/settings.json     ← MCP server + auto-learning hook
+```
 
-1. **FTS5** — SQLite full-text search with BM25 ranking (keyword matching)
-2. **sqlite-vec** — Vector similarity search using OpenAI embeddings (semantic matching)
-3. **Reciprocal Rank Fusion** — Merges results from both, boosting entries found by both methods
+**Done.** Claude Code can now query the brain and learns from your conversations automatically.
 
-When no OpenAI API key is configured, search falls back to FTS5-only (still works, just keyword-based).
+> Without `--hook`, you get just the MCP server (query only, no auto-learning).
+> Without Claude Code, you can still use the CLI to teach and search.
 
-## Embeddings
+## How it works
 
-Set your OpenAI API key for semantic search:
+### Your AI can query the brain
+
+After `init`, Claude Code has 10 MCP tools available. The most useful:
+
+```
+You: "I need to add retry logic to the payment flow"
+
+Claude Code calls nous_context("add retry logic to payment flow")
+  → returns relevant concepts, decisions, and patterns
+  → Claude now knows how payments work before writing a single line
+```
+
+### Your conversations teach the brain
+
+With `--hook`, nous listens to every conversation (async, non-blocking):
+
+```
+You: "We decided to use Redis for caching because we need pub/sub"
+Claude: [implements the feature]
+
+                    ↓ Stop hook fires (background)
+                    ↓ reads conversation transcript
+                    ↓ heuristic classifier detects "we decided to..."
+                    ↓ saves as decision with confidence: 0.6
+
+Next session:
+You: "How does caching work?"
+Claude Code calls nous_query("caching")
+  → "We decided to use Redis for caching because we need pub/sub"
+```
+
+No manual effort. You just have conversations and the brain learns.
+
+### You can teach it directly
+
+```bash
+# How something works
+npx nousdb teach concept "Payment Flow" \
+  "Stripe webhooks hit PaymentController, which dispatches to OrderService"
+
+# Why a decision was made
+npx nousdb teach decision "Chose SQLite" \
+  "Portability over scale — the brain file lives in git"
+
+# Rules to follow
+npx nousdb teach pattern "API Responses" \
+  "Always use ApiResponse wrapper, never return raw arrays"
+```
+
+## Three knowledge types
+
+| Type | When to use | Signals |
+|------|------------|---------|
+| **concept** | How something works | "works by", "the flow is", "responsible for" |
+| **decision** | Why something was chosen | "we decided", "opted for", "instead of" |
+| **pattern** | Rules to follow | "always", "never", "make sure", "convention" |
+
+## Search
+
+```bash
+npx nousdb ask "payment"
+```
+
+nous uses **hybrid search**: FTS5 keyword matching + vector semantic search (OpenAI embeddings) + Reciprocal Rank Fusion to merge results. Entries found by both methods get boosted.
+
+Works without an API key too — falls back to keyword search only.
+
+### Semantic search (optional)
+
+For semantic search ("how do we process charges" finds "Payment Flow"), set your OpenAI key:
 
 ```bash
 export OPENAI_API_KEY=sk-...
 ```
 
-Or add it to `.nous/config.json`:
+Without it, everything works — you just get keyword matching instead of semantic.
 
-```json
-{
-  "openai_api_key": "sk-..."
-}
-```
-
-Without an API key, nous works perfectly with keyword search only.
-
-## Git Integration
+## Sharing with your team
 
 The `.nous/knowledge.db` file is designed to be committed to git:
 
-- `nous init` adds `.nous/knowledge.db binary merge=binary` to `.gitattributes`
-- Journal mode is DELETE (not WAL) — no sidecar files
-- ~2.5MB per 1000 entries — well within git's comfort zone
-- Team members share the same project knowledge
+- `init` adds `merge=binary` to `.gitattributes` automatically
+- No WAL sidecar files (journal mode = DELETE)
+- ~2.5MB per 1,000 entries
+- Every team member and every AI tool gets the same project knowledge
 
-## Export
+## MCP tools
+
+After `init`, Claude Code (or any MCP client) gets these tools:
+
+| Tool | What it does |
+|------|-------------|
+| `nous_query` | Search the brain (hybrid keyword + semantic) |
+| `nous_teach` | Add new knowledge |
+| `nous_recall` | Get entry by ID or exact title |
+| `nous_update` | Update existing entry |
+| `nous_relate` | Create/query relationships between entries |
+| `nous_forget` | Deprecate or delete entries |
+| `nous_context` | Get all relevant knowledge for a task description |
+| `nous_extract` | Extract knowledge from a block of text |
+| `nous_recent` | Recently added/modified entries |
+| `nous_status` | Brain stats and health |
+
+### Manual MCP setup (if not using `init`)
+
+Add to `.claude/settings.json` or use the CLI:
 
 ```bash
-# Markdown (human-readable docs)
-npx nousdb export --format markdown
-
-# JSON (backup/migration)
-npx nousdb export --format json -o brain-backup.json
+claude mcp add nous -- npx nousdb serve
 ```
 
-## Project Structure
+## CLI reference
+
+```bash
+npx nousdb init [--name <name>] [--hook]   # Set up nous in your project
+npx nousdb serve                            # Start MCP server (stdio)
+npx nousdb status                           # Brain statistics
+npx nousdb teach <type> <title> <content>   # Add knowledge
+npx nousdb ask <question>                   # Search the brain
+npx nousdb export [--format json|markdown]  # Export for backup or docs
+npx nousdb extract --stdin [--auto-save]    # Extract knowledge from piped text
+```
+
+## How auto-learning works
+
+When you run `init --hook`, nous installs a **Stop hook** in Claude Code:
+
+1. After every Claude response, the hook fires (async, non-blocking)
+2. It reads the conversation transcript (`transcript_path` JSONL)
+3. A heuristic classifier scans for decision/concept/pattern signals
+4. New knowledge is saved with `confidence: 0.6` and `source: extracted`
+5. Deduplication prevents the same knowledge from being stored twice
+
+The classifier uses ~30 regex patterns (no LLM calls, zero cost, <10ms). It's intentionally conservative — better to miss knowledge than add noise. You can always teach it directly.
+
+## What gets created
 
 ```
-.nous/                     # Created by `nous init` (committed to git)
-├── knowledge.db           # SQLite + sqlite-vec + FTS5
-├── config.json            # Project settings
-└── .gitignore             # Excludes WAL/journal files
-```
-
-## CLI Commands
-
-```
-nous init [--name <name>] [--hook]    Create .nous/ directory, optionally add Claude Code hook
-nous serve                             Start MCP server (stdio)
-nous status                            Brain statistics
-nous teach <type> <title> <content>    Add knowledge (type: concept, decision, pattern)
-nous ask <question>                    Search the brain
-nous export [--format json|markdown]   Export brain contents
-nous extract --stdin [--auto-save]     Extract knowledge from piped text
+your-project/
+├── .nous/
+│   ├── knowledge.db      ← SQLite + sqlite-vec + FTS5 (commit this)
+│   ├── config.json       ← project settings (commit this)
+│   └── .gitignore        ← excludes WAL/journal files
+├── .claude/
+│   ├── settings.json     ← MCP server + hook config
+│   └── hooks/
+│       └── nous-extract.sh  ← auto-learning script (with --hook)
+└── .gitattributes        ← binary merge strategy for .db
 ```
 
 ## License
