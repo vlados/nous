@@ -1,10 +1,10 @@
 {
   "name": "nousdb",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Per-project knowledge brain with auto-learning from AI conversations. MCP server + SQLite + vector search.",
   "type": "module",
   "bin": {
-    "nous": "./dist/bin/nous.js"
+    "nous": "dist/bin/nous.js"
   },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
@@ -41,6 +41,14 @@
   ],
   "author": "Vladislav Stoitsov",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vlados/nous.git"
+  },
+  "homepage": "https://github.com/vlados/nous#readme",
+  "bugs": {
+    "url": "https://github.com/vlados/nous/issues"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@modelcontextprotocol/sdk": "^1.12.0",
