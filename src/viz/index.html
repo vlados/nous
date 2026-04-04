@@ -3,550 +3,592 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>nous — {{PROJECT_NAME}}</title>
+<title>NOUS // {{PROJECT_NAME}}</title>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
   :root {
-    --bg0: #0b0d12;
-    --bg1: #11131a;
-    --bg2: #181b24;
-    --bg3: #1f2330;
-    --line: #2a2e3e;
-    --text0: #e4e6ee;
-    --text1: #969bb2;
-    --text2: #555a72;
-    --concept: #4d9de0;
-    --decision: #f0a429;
-    --pattern: #2dd4b0;
-    --accent: #9b7fe8;
-    --red: #e05c6a;
-    --radius: 8px;
-    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    --bg0: #080a0e;
+    --bg1: #0c0f14;
+    --bg2: #111519;
+    --bg3: #181d23;
+    --border: #1a2030;
+    --border-hi: #253040;
+    --text0: #c8ccd4;
+    --text1: #7a8194;
+    --text2: #444b5c;
+    --green: #00e89d;
+    --green-dim: rgba(0, 232, 157, 0.08);
+    --amber: #ffa726;
+    --amber-dim: rgba(255, 167, 38, 0.08);
+    --cyan: #26c6da;
+    --cyan-dim: rgba(38, 198, 218, 0.08);
+    --red: #ef5350;
+    --concept: #26c6da;
+    --decision: #ffa726;
+    --pattern: #00e89d;
+    --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   }
 
   body {
     background: var(--bg0);
     color: var(--text0);
-    font-family: var(--font);
-    font-size: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
     height: 100vh;
     overflow: hidden;
     display: grid;
-    grid-template-columns: 1fr 360px;
-    grid-template-rows: 56px 1fr;
+    grid-template-columns: 260px 1fr 320px;
+    gap: 1px;
+    background: var(--border);
   }
 
-  /* ── Header ────────────────────────────── */
-  header {
-    grid-column: 1 / -1;
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-hi); }
+
+  /* ── LEFT PANEL ──────────────────────── */
+  #left-panel {
     background: var(--bg1);
-    border-bottom: 1px solid var(--line);
     display: flex;
-    align-items: center;
-    padding: 0 20px;
-    gap: 16px;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  header h1 {
-    font-size: 16px;
+  .panel-header {
+    padding: 12px 14px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .brand {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 4px;
+  }
+
+  .brand strong {
+    color: var(--green);
     font-weight: 600;
-    letter-spacing: -0.02em;
   }
 
-  header h1 span {
-    color: var(--text2);
-    font-weight: 400;
+  .project-name {
+    font-size: 15px;
+    font-family: var(--sans);
+    font-weight: 600;
+    color: var(--text0);
+    letter-spacing: -0.01em;
   }
 
-  .stats-bar {
+  .stats-row {
     display: flex;
-    gap: 16px;
-    margin-left: auto;
-    font-size: 12px;
-    color: var(--text2);
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 10px;
   }
 
-  .stat {
+  .stat-pill {
     display: flex;
     align-items: center;
     gap: 4px;
+    padding: 2px 7px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
   }
 
-  .stat .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
+  .stat-pill .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 1px;
   }
 
-  .stat .count {
+  .stat-pill .val { color: var(--text0); font-weight: 600; }
+
+  /* Search */
+  .search-wrap {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-wrap input {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg0);
+    border: 1px solid var(--border);
     color: var(--text0);
     font-family: var(--mono);
-    font-weight: 600;
-  }
-
-  /* ── Search ────────────────────────────── */
-  .search-box {
-    position: relative;
-    width: 280px;
-  }
-
-  .search-box input {
-    width: 100%;
-    padding: 7px 12px 7px 32px;
-    background: var(--bg3);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    color: var(--text0);
-    font-size: 13px;
-    font-family: var(--font);
+    font-size: 11px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.15s;
   }
 
-  .search-box input:focus {
-    border-color: var(--accent);
+  .search-wrap input:focus { border-color: var(--green); }
+  .search-wrap input::placeholder { color: var(--text2); }
+
+  /* Groups */
+  .groups { flex: 1; overflow-y: auto; }
+
+  .group-header {
+    display: flex;
+    align-items: center;
+    padding: 7px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg2);
+    user-select: none;
+    transition: background 0.1s;
   }
 
-  .search-box input::placeholder { color: var(--text2); }
+  .group-header:hover { background: var(--bg3); }
 
-  .search-box svg {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
+  .group-chevron {
+    width: 14px;
+    font-size: 9px;
     color: var(--text2);
+    transition: transform 0.15s;
   }
 
-  /* ── Graph canvas ──────────────────────── */
+  .group-header.collapsed .group-chevron { transform: rotate(-90deg); }
+
+  .group-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 1px;
+    margin-right: 8px;
+  }
+
+  .group-label {
+    flex: 1;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text1);
+  }
+
+  .group-count {
+    font-size: 10px;
+    color: var(--text2);
+    padding: 1px 5px;
+    background: var(--bg0);
+    border: 1px solid var(--border);
+  }
+
+  .group-entries { border-bottom: 1px solid var(--border); }
+  .group-header.collapsed + .group-entries { display: none; }
+
+  .entry-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 14px 5px 28px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border-bottom: 1px solid transparent;
+  }
+
+  .entry-item:hover { background: var(--bg3); }
+  .entry-item.active { background: var(--bg3); border-left: 2px solid var(--green); padding-left: 26px; }
+
+  .entry-dot { width: 4px; height: 4px; border-radius: 1px; flex-shrink: 0; }
+
+  .entry-title {
+    font-size: 11px;
+    color: var(--text1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    font-family: var(--sans);
+  }
+
+  .entry-item.active .entry-title { color: var(--text0); }
+
+  /* ── CENTER: GRAPH ───────────────────── */
   #graph-container {
     background: var(--bg0);
     position: relative;
     overflow: hidden;
   }
 
-  #graph-container svg {
-    width: 100%;
-    height: 100%;
+  /* Grid background */
+  #graph-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 60px 60px;
+    opacity: 0.3;
+    pointer-events: none;
   }
+
+  #graph-container svg { width: 100%; height: 100%; position: relative; z-index: 1; }
 
   .node circle {
     cursor: pointer;
-    stroke-width: 2;
-    transition: r 0.15s;
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 3px rgba(0,0,0,0.5));
+    transition: filter 0.15s;
   }
 
-  .node circle:hover { filter: brightness(1.3); }
-
-  .node.selected circle {
-    stroke: #fff;
-    stroke-width: 3;
-  }
+  .node circle:hover { filter: drop-shadow(0 0 8px rgba(0, 232, 157, 0.3)); }
+  .node.selected circle { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 12px rgba(0, 232, 157, 0.5)); }
+  .node.dimmed circle { opacity: 0.15; }
+  .node.dimmed text { opacity: 0.1; }
 
   .node text {
-    font-size: 11px;
-    fill: var(--text1);
-    pointer-events: none;
-    font-family: var(--font);
-  }
-
-  .link {
-    stroke: var(--line);
-    stroke-opacity: 0.5;
-    stroke-width: 1.5;
-  }
-
-  .link-label {
-    font-size: 9px;
+    font-size: 10px;
     fill: var(--text2);
+    pointer-events: none;
     font-family: var(--mono);
   }
 
-  /* ── Sidebar ───────────────────────────── */
-  #sidebar {
-    background: var(--bg1);
-    border-left: 1px solid var(--line);
-    overflow-y: auto;
-    padding: 0;
+  .link { stroke: var(--border-hi); stroke-opacity: 0.4; stroke-width: 1; }
+  .link.highlighted { stroke: var(--green); stroke-opacity: 0.6; stroke-width: 1.5; }
+  .link.dimmed { stroke-opacity: 0.05; }
+
+  .link-label { font-size: 8px; fill: var(--text2); font-family: var(--mono); opacity: 0; }
+  .link-label.visible { opacity: 1; }
+
+  .empty-graph {
+    position: absolute;
+    inset: 0;
     display: flex;
     flex-direction: column;
-  }
-
-  .sidebar-section {
-    padding: 16px;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .sidebar-section h3 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
+    align-items: center;
+    justify-content: center;
     color: var(--text2);
-    margin-bottom: 10px;
+    font-size: 12px;
+    z-index: 2;
+    text-align: center;
+    gap: 8px;
   }
 
-  /* Filter pills */
-  .filters {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-  }
-
-  .filter-pill {
-    padding: 4px 10px;
-    border-radius: 20px;
+  .empty-graph code {
+    background: var(--bg3);
+    padding: 2px 8px;
+    border: 1px solid var(--border);
+    color: var(--green);
     font-size: 11px;
-    font-weight: 500;
-    border: 1px solid var(--line);
-    background: transparent;
-    color: var(--text1);
-    cursor: pointer;
-    transition: all 0.15s;
   }
 
-  .filter-pill:hover { border-color: var(--text1); }
-  .filter-pill.active { border-color: transparent; color: #fff; }
-  .filter-pill[data-type="concept"].active { background: var(--concept); }
-  .filter-pill[data-type="decision"].active { background: var(--decision); }
-  .filter-pill[data-type="pattern"].active { background: var(--pattern); }
-  .filter-pill[data-type="all"].active { background: var(--accent); }
+  /* Legend */
+  .legend {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    display: flex;
+    gap: 12px;
+    font-size: 9px;
+    color: var(--text2);
+    background: rgba(8, 10, 14, 0.9);
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    z-index: 3;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
 
-  /* Entry detail */
-  #detail-panel {
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 6px; height: 6px; border-radius: 1px; }
+
+  /* ── RIGHT PANEL ─────────────────────── */
+  #right-panel {
+    background: var(--bg1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .detail-scroll {
     flex: 1;
     overflow-y: auto;
+    padding: 16px;
   }
 
   .detail-empty {
-    padding: 40px 16px;
-    text-align: center;
     color: var(--text2);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1.6;
+    padding-top: 20px;
   }
 
-  .detail-content {
-    padding: 16px;
+  .detail-empty .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text2);
+    margin-bottom: 12px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
   }
 
+  .detail-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .detail-stat {
+    padding: 8px 10px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+  }
+
+  .detail-stat .val { font-size: 18px; font-weight: 700; color: var(--text0); }
+  .detail-stat .lbl { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+
+  /* Selected entry detail */
   .detail-type {
     display: inline-block;
     padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.1em;
     margin-bottom: 8px;
+    border: 1px solid;
   }
 
-  .detail-type.concept { background: rgba(77, 157, 224, 0.15); color: var(--concept); }
-  .detail-type.decision { background: rgba(240, 164, 41, 0.15); color: var(--decision); }
-  .detail-type.pattern { background: rgba(45, 212, 176, 0.15); color: var(--pattern); }
+  .detail-type.concept { color: var(--cyan); border-color: var(--cyan); background: var(--cyan-dim); }
+  .detail-type.decision { color: var(--amber); border-color: var(--amber); background: var(--amber-dim); }
+  .detail-type.pattern { color: var(--green); border-color: var(--green); background: var(--green-dim); }
 
   .detail-title {
     font-size: 16px;
     font-weight: 600;
+    font-family: var(--sans);
     margin-bottom: 12px;
     line-height: 1.3;
+    color: var(--text0);
   }
 
   .detail-body {
-    font-size: 13px;
-    line-height: 1.65;
+    font-size: 12px;
+    line-height: 1.7;
     color: var(--text1);
+    font-family: var(--sans);
     white-space: pre-wrap;
     word-break: break-word;
   }
 
-  .detail-meta {
-    margin-top: 16px;
-    padding-top: 12px;
-    border-top: 1px solid var(--line);
-    font-size: 11px;
-    color: var(--text2);
+  .detail-body code {
+    background: var(--bg3);
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    color: var(--green);
     font-family: var(--mono);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    font-size: 11px;
   }
+
+  .detail-body strong { color: var(--text0); }
 
   .detail-tags {
     display: flex;
     gap: 4px;
     flex-wrap: wrap;
-    margin-top: 8px;
+    margin-top: 12px;
   }
 
   .tag {
     padding: 2px 6px;
     background: var(--bg3);
-    border-radius: 4px;
+    border: 1px solid var(--border);
+    font-size: 9px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .detail-meta {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
     font-size: 10px;
-    color: var(--text1);
-    font-family: var(--mono);
+    color: var(--text2);
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    gap: 3px 8px;
   }
 
-  .detail-relationships {
+  .detail-meta .key { color: var(--text2); }
+  .detail-meta .val { color: var(--text1); }
+
+  .detail-rels {
     margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid var(--line);
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
   }
 
-  .detail-relationships h4 {
-    font-size: 11px;
+  .detail-rels h4 {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
     color: var(--text2);
     margin-bottom: 6px;
   }
 
   .rel-item {
-    font-size: 12px;
-    padding: 4px 0;
+    font-size: 11px;
+    padding: 3px 0;
     color: var(--text1);
     cursor: pointer;
+    font-family: var(--sans);
   }
 
   .rel-item:hover { color: var(--text0); }
+  .rel-type { color: var(--green); font-family: var(--mono); font-size: 9px; }
 
-  .rel-type {
-    font-family: var(--mono);
-    font-size: 10px;
-    color: var(--accent);
-  }
-
-  /* Entry list */
-  .entry-list {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .entry-item {
-    padding: 8px 12px;
-    border-radius: var(--radius);
-    cursor: pointer;
-    transition: background 0.1s;
+  /* Bottom status bar */
+  .status-bar {
+    padding: 8px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 9px;
+    color: var(--text2);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
-  .entry-item:hover { background: var(--bg3); }
-  .entry-item.active { background: var(--bg3); }
-
-  .entry-dot {
-    width: 6px;
-    height: 6px;
+  .status-dot {
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    flex-shrink: 0;
+    animation: pulse 2s infinite;
   }
 
-  .entry-item .title {
-    font-size: 12px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex: 1;
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
   }
 
-  .entry-item .score {
-    font-size: 10px;
-    font-family: var(--mono);
-    color: var(--text2);
-  }
-
-  /* ── Tooltip ───────────────────────────── */
   .tooltip {
-    position: absolute;
-    background: var(--bg2);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 8px 12px;
-    font-size: 12px;
+    position: fixed;
+    background: var(--bg3);
+    border: 1px solid var(--border-hi);
+    padding: 6px 10px;
+    font-size: 11px;
     pointer-events: none;
     opacity: 0;
-    transition: opacity 0.15s;
-    max-width: 250px;
-    z-index: 10;
+    transition: opacity 0.1s;
+    z-index: 100;
+    max-width: 220px;
+    font-family: var(--sans);
   }
 
   .tooltip.visible { opacity: 1; }
-
-  /* ── Legend ─────────────────────────────── */
-  .legend {
-    position: absolute;
-    bottom: 16px;
-    left: 16px;
-    display: flex;
-    gap: 14px;
-    font-size: 11px;
-    color: var(--text2);
-    background: rgba(11, 13, 18, 0.85);
-    padding: 8px 14px;
-    border-radius: var(--radius);
-    border: 1px solid var(--line);
-  }
-
-  .legend-item {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-  }
-
-  .legend-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-  }
-
-  /* ── Embedding banner ──────────────────── */
-  .banner {
-    padding: 10px 16px;
-    font-size: 12px;
-    line-height: 1.5;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .banner.warning {
-    background: rgba(240, 164, 41, 0.08);
-    border-bottom-color: rgba(240, 164, 41, 0.2);
-    color: var(--text1);
-  }
-
-  .banner.ok {
-    background: rgba(45, 212, 176, 0.06);
-    border-bottom-color: rgba(45, 212, 176, 0.15);
-    color: var(--text2);
-  }
-
-  .banner code {
-    background: var(--bg3);
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text0);
-  }
-
-  .banner a {
-    color: var(--accent);
-    text-decoration: none;
-  }
-
-  .banner a:hover { text-decoration: underline; }
+  .tooltip .tt-type { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>nous <span>/ {{PROJECT_NAME}}</span></h1>
-  <div class="search-box">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-    </svg>
+<!-- LEFT PANEL -->
+<div id="left-panel">
+  <div class="panel-header">
+    <div class="brand"><strong>NOUS</strong> // BRAIN</div>
+    <div class="project-name">{{PROJECT_NAME}}</div>
+    <div class="stats-row" id="stats-row"></div>
+  </div>
+  <div class="search-wrap">
     <input type="text" id="search-input" placeholder="Search knowledge..." />
   </div>
-  <div class="stats-bar" id="stats-bar"></div>
-</header>
+  <div class="groups" id="groups"></div>
+</div>
 
+<!-- CENTER: GRAPH -->
 <div id="graph-container">
   <svg id="graph"></svg>
   <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background: var(--concept)"></div> concept</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--decision)"></div> decision</div>
-    <div class="legend-item"><div class="legend-dot" style="background: var(--pattern)"></div> pattern</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--concept)"></div> concept</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--decision)"></div> decision</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--pattern)"></div> pattern</div>
   </div>
   <div class="tooltip" id="tooltip"></div>
 </div>
 
-<div id="sidebar">
-  <div id="embedding-banner"></div>
-  <div class="sidebar-section">
-    <h3>Filter</h3>
-    <div class="filters">
-      <button class="filter-pill active" data-type="all">All</button>
-      <button class="filter-pill" data-type="concept">Concepts</button>
-      <button class="filter-pill" data-type="decision">Decisions</button>
-      <button class="filter-pill" data-type="pattern">Patterns</button>
-    </div>
-  </div>
-
-  <div class="sidebar-section" id="entries-section">
-    <h3>Entries</h3>
-    <div class="entry-list" id="entry-list"></div>
-  </div>
-
-  <div id="detail-panel">
-    <div class="detail-empty">
-      Click a node or entry to see details
-    </div>
-  </div>
+<!-- RIGHT PANEL -->
+<div id="right-panel">
+  <div class="detail-scroll" id="detail-panel"></div>
+  <div class="status-bar" id="status-bar"></div>
 </div>
 
 <script>
-const TYPE_COLORS = { concept: '#4d9de0', decision: '#f0a429', pattern: '#2dd4b0' };
+const TYPE_COLORS = { concept: '#26c6da', decision: '#ffa726', pattern: '#00e89d' };
 const HAS_EMBEDDINGS = {{HAS_EMBEDDINGS}};
 const EMBEDDING_MODEL = '{{EMBEDDING_MODEL}}';
 
 let allData = { nodes: [], edges: [] };
-let simulation, svg, g, nodeElements, linkElements, labelElements;
+let simulation, svg, g, nodeElements, linkElements, linkLabels, labelElements;
 let selectedId = null;
-let activeFilter = 'all';
 
-// ── Embedding banner ────────────────────────
-function renderEmbeddingBanner(stats) {
-  const banner = document.getElementById('embedding-banner');
-  if (HAS_EMBEDDINGS) {
-    const coverage = stats.total_entries > 0 ? Math.round(stats.embedding_coverage * 100) : 0;
-    banner.innerHTML = `<div class="banner ok">Semantic search active — <code>${EMBEDDING_MODEL}</code> (${coverage}% coverage)</div>`;
-  } else {
-    banner.innerHTML = `
-      <div class="banner warning">
-        Semantic search disabled — keyword search only.<br>
-        For full AI-powered search, set your API key:<br>
-        <code>export OPENAI_API_KEY=sk-...</code><br>
-        or add <code>"openai_api_key"</code> to <code>.nous/config.json</code>
-      </div>`;
-  }
-}
-
-// ── Fetch data ──────────────────────────────
-async function fetchData() {
-  const [graphRes, statsRes] = await Promise.all([
-    fetch('/api/graph'),
-    fetch('/api/stats'),
-  ]);
+// ── Init ─────────────────────────────────────
+async function init() {
+  const [graphRes, statsRes] = await Promise.all([fetch('/api/graph'), fetch('/api/stats')]);
   const graph = await graphRes.json();
   const stats = await statsRes.json();
-
   allData = graph;
+
   renderStats(stats);
-  renderEmbeddingBanner(stats);
-  renderEntryList(graph.nodes);
+  renderGroups(graph.nodes);
   renderGraph(graph);
+  renderStatusBar();
+
+  // Auto-select Project Overview
+  const overview = graph.nodes.find(n => /project overview|overview/i.test(n.title));
+  if (overview) selectNode(overview.id);
+  else showDefaultDetail(stats);
 }
 
 function renderStats(stats) {
-  document.getElementById('stats-bar').innerHTML = `
-    <div class="stat"><div class="dot" style="background: var(--concept)"></div><span class="count">${stats.by_type?.concept ?? 0}</span> concepts</div>
-    <div class="stat"><div class="dot" style="background: var(--decision)"></div><span class="count">${stats.by_type?.decision ?? 0}</span> decisions</div>
-    <div class="stat"><div class="dot" style="background: var(--pattern)"></div><span class="count">${stats.by_type?.pattern ?? 0}</span> patterns</div>
-    <div class="stat"><span class="count">${stats.total_relationships ?? 0}</span> links</div>
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-pill"><div class="dot" style="background:var(--concept)"></div><span class="val">${stats.by_type?.concept ?? 0}</span></div>
+    <div class="stat-pill"><div class="dot" style="background:var(--decision)"></div><span class="val">${stats.by_type?.decision ?? 0}</span></div>
+    <div class="stat-pill"><div class="dot" style="background:var(--pattern)"></div><span class="val">${stats.by_type?.pattern ?? 0}</span></div>
+    <div class="stat-pill"><span class="val">${stats.total_relationships ?? 0}</span> links</div>
   `;
 }
 
-// ── Entry list ──────────────────────────────
-function renderEntryList(nodes) {
-  const filtered = activeFilter === 'all' ? nodes : nodes.filter(n => n.type === activeFilter);
-  const list = document.getElementById('entry-list');
-  list.innerHTML = filtered.map(n => `
-    <div class="entry-item ${n.id === selectedId ? 'active' : ''}" data-id="${n.id}" onclick="selectNode('${n.id}')">
-      <div class="entry-dot" style="background: ${TYPE_COLORS[n.type]}"></div>
-      <div class="title">${escHtml(n.title)}</div>
-    </div>
-  `).join('');
+function renderStatusBar() {
+  const dot = HAS_EMBEDDINGS ? 'var(--green)' : 'var(--amber)';
+  const text = HAS_EMBEDDINGS ? `semantic search — ${EMBEDDING_MODEL}` : 'keyword search only';
+  document.getElementById('status-bar').innerHTML = `<div class="status-dot" style="background:${dot}"></div>${text}`;
+}
+
+// ── Groups ───────────────────────────────────
+function renderGroups(nodes) {
+  const groups = [
+    { type: 'concept', label: 'Concepts', color: 'var(--concept)' },
+    { type: 'decision', label: 'Decisions', color: 'var(--decision)' },
+    { type: 'pattern', label: 'Patterns', color: 'var(--pattern)' },
+  ];
+
+  const container = document.getElementById('groups');
+  container.innerHTML = groups.map(g => {
+    const items = nodes.filter(n => n.type === g.type);
+    return `
+      <div class="group-header" onclick="toggleGroup(this)" data-type="${g.type}">
+        <span class="group-chevron">▼</span>
+        <div class="group-dot" style="background:${g.color}"></div>
+        <span class="group-label">${g.label}</span>
+        <span class="group-count">${items.length}</span>
+      </div>
+      <div class="group-entries">${items.map(n => `
+        <div class="entry-item ${n.id === selectedId ? 'active' : ''}" data-id="${n.id}" onclick="selectNode('${n.id}')">
+          <div class="entry-dot" style="background:${TYPE_COLORS[n.type]}"></div>
+          <div class="entry-title">${esc(n.title)}</div>
+        </div>
+      `).join('')}</div>
+    `;
+  }).join('');
+}
+
+function toggleGroup(el) {
+  el.classList.toggle('collapsed');
 }
 
 // ── Graph ────────────────────────────────────
@@ -555,126 +597,94 @@ function renderGraph(data) {
   const width = container.clientWidth;
   const height = container.clientHeight;
 
-  d3.select('#graph').selectAll('*').remove();
+  // Only show connected nodes in the graph
+  const connectedIds = new Set();
+  data.edges.forEach(e => { connectedIds.add(e.source); connectedIds.add(e.target); });
 
-  svg = d3.select('#graph')
-    .attr('viewBox', [0, 0, width, height]);
-
-  g = svg.append('g');
-
-  // Zoom
-  const zoom = d3.zoom()
-    .scaleExtent([0.2, 4])
-    .on('zoom', (e) => g.attr('transform', e.transform));
-  svg.call(zoom);
-
-  // Force simulation
-  const nodes = data.nodes.map(d => ({ ...d }));
+  const nodes = data.nodes.filter(n => connectedIds.has(n.id)).map(d => ({ ...d }));
   const edges = data.edges.map(d => ({ ...d }));
 
-  // Size nodes by content length
+  if (nodes.length === 0) {
+    document.getElementById('graph-container').innerHTML += `
+      <div class="empty-graph">
+        <div>NO CONNECTIONS MAPPED</div>
+        <div style="color:var(--text2);font-size:10px;margin-top:4px">
+          Use <code>nous_relate</code> to connect knowledge entries
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  d3.select('#graph').selectAll('*').remove();
+  svg = d3.select('#graph').attr('viewBox', [0, 0, width, height]);
+  g = svg.append('g');
+
+  const zoom = d3.zoom().scaleExtent([0.3, 3]).on('zoom', e => g.attr('transform', e.transform));
+  svg.call(zoom);
+
   nodes.forEach(n => {
-    n.radius = Math.max(6, Math.min(20, 6 + (n.content?.length ?? 0) / 30));
+    n.radius = Math.max(8, Math.min(22, 6 + Math.sqrt(n.content?.length ?? 0) * 0.7));
   });
 
+  // Arrow marker
+  svg.append('defs').append('marker')
+    .attr('id', 'arrow').attr('viewBox', '0 0 10 10')
+    .attr('refX', 20).attr('refY', 5)
+    .attr('markerWidth', 6).attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L10,5 L0,10 Z').attr('fill', '#253040');
+
   simulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(edges).id(d => d.id).distance(100).strength(0.4))
-    .force('charge', d3.forceManyBody().strength(-200))
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(120).strength(0.3))
+    .force('charge', d3.forceManyBody().strength(-250))
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(d => d.radius + 8))
-    .force('x', d3.forceX(width / 2).strength(0.03))
-    .force('y', d3.forceY(height / 2).strength(0.03));
+    .force('collision', d3.forceCollide().radius(d => d.radius + 12));
 
-  // Links
-  linkElements = g.append('g')
-    .selectAll('line')
-    .data(edges)
-    .join('line')
-    .attr('class', 'link');
+  linkElements = g.append('g').selectAll('line').data(edges).join('line')
+    .attr('class', 'link').attr('marker-end', 'url(#arrow)');
 
-  // Link labels
-  const linkLabels = g.append('g')
-    .selectAll('text')
-    .data(edges)
-    .join('text')
-    .attr('class', 'link-label')
-    .text(d => d.type);
+  linkLabels = g.append('g').selectAll('text').data(edges).join('text')
+    .attr('class', 'link-label').text(d => d.type);
 
-  // Nodes
-  nodeElements = g.append('g')
-    .selectAll('g')
-    .data(nodes)
-    .join('g')
+  nodeElements = g.append('g').selectAll('g').data(nodes).join('g')
     .attr('class', 'node')
-    .call(d3.drag()
-      .on('start', dragStart)
-      .on('drag', dragging)
-      .on('end', dragEnd));
+    .call(d3.drag().on('start', dragStart).on('drag', dragging).on('end', dragEnd));
 
   nodeElements.append('circle')
     .attr('r', d => d.radius)
-    .attr('fill', d => TYPE_COLORS[d.type] || '#666')
-    .attr('stroke', d => d3.color(TYPE_COLORS[d.type] || '#666').darker(0.5));
+    .attr('fill', d => TYPE_COLORS[d.type] || '#444')
+    .attr('stroke', d => d3.color(TYPE_COLORS[d.type] || '#444').darker(0.8));
 
-  // Labels
   labelElements = nodeElements.append('text')
-    .text(d => d.title.length > 25 ? d.title.slice(0, 23) + '...' : d.title)
-    .attr('dx', d => d.radius + 5)
-    .attr('dy', 4);
+    .text(d => d.title.length > 22 ? d.title.slice(0, 20) + '...' : d.title)
+    .attr('dx', d => d.radius + 6).attr('dy', 3);
 
-  // Interactions
   nodeElements
-    .on('click', (e, d) => {
-      e.stopPropagation();
-      selectNode(d.id);
-    })
+    .on('click', (e, d) => { e.stopPropagation(); selectNode(d.id); })
     .on('mouseenter', (e, d) => showTooltip(e, d))
     .on('mouseleave', hideTooltip);
 
-  svg.on('click', () => {
-    selectedId = null;
-    updateSelection();
-    showEmptyDetail();
-  });
+  svg.on('click', () => { selectedId = null; updateSelection(); showDefaultDetailAsync(); });
 
   simulation.on('tick', () => {
-    linkElements
-      .attr('x1', d => d.source.x)
-      .attr('y1', d => d.source.y)
-      .attr('x2', d => d.target.x)
-      .attr('y2', d => d.target.y);
-
-    linkLabels
-      .attr('x', d => (d.source.x + d.target.x) / 2)
+    linkElements.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    linkLabels.attr('x', d => (d.source.x + d.target.x) / 2)
       .attr('y', d => (d.source.y + d.target.y) / 2);
-
     nodeElements.attr('transform', d => `translate(${d.x},${d.y})`);
   });
 }
 
 // ── Drag ─────────────────────────────────────
-function dragStart(e, d) {
-  if (!e.active) simulation.alphaTarget(0.3).restart();
-  d.fx = d.x;
-  d.fy = d.y;
-}
-
-function dragging(e, d) {
-  d.fx = e.x;
-  d.fy = e.y;
-}
-
-function dragEnd(e, d) {
-  if (!e.active) simulation.alphaTarget(0);
-  d.fx = null;
-  d.fy = null;
-}
+function dragStart(e, d) { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
+function dragging(e, d) { d.fx = e.x; d.fy = e.y; }
+function dragEnd(e, d) { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
 
 // ── Selection ────────────────────────────────
 async function selectNode(id) {
   selectedId = id;
   updateSelection();
-
   const res = await fetch(`/api/entry?id=${id}`);
   const entry = await res.json();
   showDetail(entry);
@@ -682,134 +692,146 @@ async function selectNode(id) {
 
 function updateSelection() {
   if (!nodeElements) return;
-  nodeElements.classed('selected', d => d.id === selectedId);
+  const sel = selectedId;
 
-  // Highlight connected links
-  if (linkElements) {
-    linkElements
-      .attr('stroke-opacity', d =>
-        selectedId ? (d.source.id === selectedId || d.target.id === selectedId ? 1 : 0.15) : 0.5
-      )
-      .attr('stroke-width', d =>
-        selectedId && (d.source.id === selectedId || d.target.id === selectedId) ? 2.5 : 1.5
-      );
+  nodeElements.classed('selected', d => d.id === sel);
+
+  if (sel && linkElements) {
+    const connIds = new Set([sel]);
+    linkElements.each(function(d) {
+      if (d.source.id === sel || d.target.id === sel) {
+        connIds.add(d.source.id); connIds.add(d.target.id);
+      }
+    });
+
+    nodeElements.classed('dimmed', d => !connIds.has(d.id));
+    linkElements.classed('highlighted', d => d.source.id === sel || d.target.id === sel);
+    linkElements.classed('dimmed', d => d.source.id !== sel && d.target.id !== sel);
+    linkLabels.classed('visible', d => d.source.id === sel || d.target.id === sel);
+  } else {
+    nodeElements.classed('dimmed', false);
+    if (linkElements) {
+      linkElements.classed('highlighted', false).classed('dimmed', false);
+      linkLabels.classed('visible', false);
+    }
   }
 
-  // Update entry list selection
   document.querySelectorAll('.entry-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === selectedId);
+    el.classList.toggle('active', el.dataset.id === sel);
   });
 }
 
-// ── Detail panel ─────────────────────────────
+// ── Detail Panel ─────────────────────────────
 function showDetail(entry) {
   const panel = document.getElementById('detail-panel');
+  const content = renderContent(entry.content);
 
-  const relHtml = (rels, direction) => {
-    if (!rels || rels.length === 0) return '';
-    return `
-      <div class="detail-relationships">
-        <h4>${direction}</h4>
-        ${rels.map(r => `
-          <div class="rel-item" onclick="selectNode('${direction === 'Outgoing' ? r.to_id : r.from_id}')">
-            <span class="rel-type">${r.relation_type}</span>
-            ${escHtml(direction === 'Outgoing' ? (r.to_title || r.to_id) : (r.from_title || r.from_id))}
-          </div>
-        `).join('')}
-      </div>
-    `;
+  const rels = (list, dir) => {
+    if (!list?.length) return '';
+    return `<div class="detail-rels"><h4>${dir}</h4>${list.map(r => `
+      <div class="rel-item" onclick="selectNode('${dir === 'outgoing' ? r.to_id : r.from_id}')">
+        <span class="rel-type">${r.relation_type}</span>
+        ${esc(dir === 'outgoing' ? (r.to_title || r.to_id) : (r.from_title || r.from_id))}
+      </div>`).join('')}</div>`;
   };
 
   panel.innerHTML = `
-    <div class="detail-content">
-      <div class="detail-type ${entry.type}">${entry.type}</div>
-      <div class="detail-title">${escHtml(entry.title)}</div>
-      <div class="detail-body">${escHtml(entry.content)}</div>
-      ${entry.tags?.length ? `
-        <div class="detail-tags">
-          ${entry.tags.map(t => `<span class="tag">${escHtml(t)}</span>`).join('')}
-        </div>
-      ` : ''}
-      <div class="detail-meta">
-        <div>id: ${entry.id}</div>
-        <div>scope: ${entry.scope || 'general'}</div>
-        <div>confidence: ${entry.confidence}</div>
-        <div>source: ${entry.source}</div>
-        <div>created: ${entry.created_at}</div>
-      </div>
-      ${relHtml(entry.outgoing, 'Outgoing')}
-      ${relHtml(entry.incoming, 'Incoming')}
+    <div class="detail-type ${entry.type}">${entry.type}</div>
+    <div class="detail-title">${esc(entry.title)}</div>
+    <div class="detail-body">${content}</div>
+    ${entry.tags?.length ? `<div class="detail-tags">${entry.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+    <div class="detail-meta">
+      <span class="key">id</span><span class="val">${entry.id}</span>
+      <span class="key">scope</span><span class="val">${entry.scope || '—'}</span>
+      <span class="key">confidence</span><span class="val">${entry.confidence}</span>
+      <span class="key">source</span><span class="val">${entry.source}</span>
+      <span class="key">created</span><span class="val">${timeAgo(entry.created_at)}</span>
     </div>
+    ${rels(entry.outgoing, 'outgoing')}
+    ${rels(entry.incoming, 'incoming')}
   `;
 }
 
-function showEmptyDetail() {
+async function showDefaultDetailAsync() {
+  const res = await fetch('/api/stats');
+  showDefaultDetail(await res.json());
+}
+
+function showDefaultDetail(stats) {
   document.getElementById('detail-panel').innerHTML = `
-    <div class="detail-empty">Click a node or entry to see details</div>
+    <div class="detail-empty">
+      <div class="label">brain overview</div>
+      <div class="detail-stat-grid">
+        <div class="detail-stat"><div class="val">${stats.total_entries}</div><div class="lbl">total</div></div>
+        <div class="detail-stat"><div class="val" style="color:var(--concept)">${stats.by_type?.concept ?? 0}</div><div class="lbl">concepts</div></div>
+        <div class="detail-stat"><div class="val" style="color:var(--decision)">${stats.by_type?.decision ?? 0}</div><div class="lbl">decisions</div></div>
+        <div class="detail-stat"><div class="val" style="color:var(--pattern)">${stats.by_type?.pattern ?? 0}</div><div class="lbl">patterns</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--text2)">Select an entry to view details</div>
+    </div>
   `;
 }
 
 // ── Tooltip ──────────────────────────────────
 function showTooltip(event, d) {
-  const tooltip = document.getElementById('tooltip');
-  tooltip.innerHTML = `<strong>${escHtml(d.title)}</strong><br><span style="color:${TYPE_COLORS[d.type]}">${d.type}</span>`;
-  tooltip.style.left = (event.offsetX + 15) + 'px';
-  tooltip.style.top = (event.offsetY - 10) + 'px';
-  tooltip.classList.add('visible');
+  const t = document.getElementById('tooltip');
+  t.innerHTML = `<div class="tt-type" style="color:${TYPE_COLORS[d.type]}">${d.type}</div><div>${esc(d.title)}</div>`;
+  t.style.left = (event.clientX + 12) + 'px';
+  t.style.top = (event.clientY - 10) + 'px';
+  t.classList.add('visible');
 }
 
-function hideTooltip() {
-  document.getElementById('tooltip').classList.remove('visible');
-}
+function hideTooltip() { document.getElementById('tooltip').classList.remove('visible'); }
 
 // ── Search ───────────────────────────────────
-let searchTimeout;
-document.getElementById('search-input').addEventListener('input', (e) => {
-  clearTimeout(searchTimeout);
+let searchTimer;
+document.getElementById('search-input').addEventListener('input', e => {
+  clearTimeout(searchTimer);
   const q = e.target.value.trim();
-
-  if (!q) {
-    renderEntryList(allData.nodes);
-    return;
-  }
-
-  searchTimeout = setTimeout(async () => {
+  if (!q) { renderGroups(allData.nodes); return; }
+  searchTimer = setTimeout(async () => {
     const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
     const results = await res.json();
-
-    const list = document.getElementById('entry-list');
-    list.innerHTML = results.map(r => `
+    const container = document.getElementById('groups');
+    if (results.length === 0) {
+      container.innerHTML = '<div style="padding:20px 14px;color:var(--text2);font-size:11px">No results</div>';
+      return;
+    }
+    container.innerHTML = results.map(r => `
       <div class="entry-item" data-id="${r.id}" onclick="selectNode('${r.id}')">
-        <div class="entry-dot" style="background: ${TYPE_COLORS[r.type]}"></div>
-        <div class="title">${escHtml(r.title)}</div>
-        <div class="score">${r.score?.toFixed(3) || ''}</div>
+        <div class="entry-dot" style="background:${TYPE_COLORS[r.type]}"></div>
+        <div class="entry-title">${esc(r.title)}</div>
       </div>
     `).join('');
-
-    if (results.length === 0) {
-      list.innerHTML = '<div style="padding:12px;color:var(--text2);font-size:12px">No results</div>';
-    }
   }, 200);
 });
 
-// ── Filters ──────────────────────────────────
-document.querySelectorAll('.filter-pill').forEach(pill => {
-  pill.addEventListener('click', () => {
-    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
-    pill.classList.add('active');
-    activeFilter = pill.dataset.type;
-    renderEntryList(allData.nodes);
-  });
-});
-
-// ── Utils ────────────────────────────────────
-function escHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+// ── Helpers ──────────────────────────────────
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ── Init ─────────────────────────────────────
-fetchData();
+function renderContent(text) {
+  if (!text) return '';
+  return esc(text)
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^- (.+)$/gm, '• $1');
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr.replace(' ', 'T') + 'Z');
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  if (diff < 604800) return Math.floor(diff/86400) + 'd ago';
+  return d.toLocaleDateString('en', { day: 'numeric', month: 'short' });
+}
+
+init();
 </script>
 </body>
 </html>
