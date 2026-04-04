@@ -270,6 +270,7 @@ export function findModels(projectDir: string, stack: StackInfo): FileInfo[] {
   ];
 
   const models: FileInfo[] = [];
+  const seenNames = new Set<string>();
   for (const dir of modelDirs) {
     const fullDir = join(projectDir, dir);
     if (existsSync(fullDir)) {
@@ -278,10 +279,13 @@ export function findModels(projectDir: string, stack: StackInfo): FileInfo[] {
           (f) => /\.(php|ts|js|py|rb|go)$/.test(f) && !f.startsWith('.')
         );
         for (const file of files) {
+          const name = basename(file, extname(file));
+          if (seenNames.has(name)) continue;
+          seenNames.add(name);
           const filePath = join(fullDir, file);
           models.push({
             path: filePath.replace(projectDir + '/', ''),
-            name: basename(file, extname(file)),
+            name,
             size: statSync(filePath).size,
           });
         }

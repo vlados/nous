@@ -165,27 +165,49 @@ export class ProjectScanner {
       entriesCreated++;
     }
 
-    // Models overview
+    // Models overview — read each model file for relationships and traits
     if (models.length > 0) {
+      const modelDetails = models.map((m) => {
+        try {
+          const content = readFileSync(join(projectDir, m.path), 'utf-8');
+          const relations = this.extractModelRelations(content);
+          const traits = this.extractTraits(content);
+          const parts = [m.name];
+          if (relations.length) parts.push(`(${relations.join(', ')})`);
+          if (traits.length) parts.push(`[${traits.join(', ')}]`);
+          return parts.join(' ');
+        } catch { return m.name; }
+      });
+
       this.createEntry({
         type: 'concept',
         title: 'Data Models',
-        content: `${models.length} models: ${models.map((m) => m.name).join(', ')}`,
+        content: `${models.length} models:\n${modelDetails.map((d) => `- ${d}`).join('\n')}`,
         tags: ['models', 'database'],
         scope: 'backend',
       });
       entriesCreated++;
     }
 
-    // Routes overview
+    // Routes overview — parse actual route definitions
     if (routes.length > 0) {
-      const totalRoutes = routes.reduce((sum, r) => sum + r.count, 0);
+      const routeDetails: string[] = [];
+      for (const route of routes) {
+        try {
+          const content = readFileSync(join(projectDir, route.file), 'utf-8');
+          const parsed = this.parseRouteFile(content, stack);
+          routeDetails.push(`${route.file} (${route.type}):\n${parsed.map((r) => `  ${r.method} ${r.path} → ${r.handler}`).join('\n')}`);
+        } catch {
+          routeDetails.push(`${route.file}: ${route.count} ${route.type} routes`);
+        }
+      }
+
       this.createEntry({
         type: 'concept',
-        title: 'API Routes',
-        content: routes.map((r) => `${r.file}: ${r.count} ${r.type} routes`).join('\n'),
-        tags: ['routes', 'api'],
-        scope: 'api',
+        title: 'Routes & Endpoints',
+        content: routeDetails.join('\n\n'),
+        tags: ['routes', 'navigation'],
+        scope: routes.some((r) => r.type === 'api') ? 'api' : 'backend',
       });
       entriesCreated++;
     }
@@ -198,6 +220,33 @@ export class ProjectScanner {
         content: `Tests use ${tests.framework ?? 'unknown framework'} in ${tests.directory ?? 'unknown dir'}. ${tests.fileCount} test files found.`,
         tags: ['tests', 'quality'],
         scope: '',
+      });
+      entriesCreated++;
+    }
+
+    // CI/CD
+    if (cicd.length > 0) {
+      this.createEntry({
+        type: 'concept',
+        title: 'Build & Deploy',
+        content: cicd.map((f) => `- ${f.path}`).join('\n'),
+        tags: ['cicd', 'devops'],
+        scope: 'infra',
+      });
+      entriesCreated++;
+    }
+
+    // Config overview
+    if (config.envVars.length > 0) {
+      const grouped = this.groupEnvVars(config.envVars);
+      this.createEntry({
+        type: 'concept',
+        title: 'Configuration & Environment',
+        content: Object.entries(grouped)
+          .map(([group, vars]) => `${group}: ${vars.join(', ')}`)
+          .join('\n'),
+        tags: ['config', 'environment'],
+        scope: 'infra',
       });
       entriesCreated++;
     }
@@ -399,5 +448,77 @@ export class ProjectScanner {
     if (arch.hasMonorepo) parts.push('Monorepo structure');
 
     return parts.join('\n');
+  }
+
+  /** Extract relationship method names from a PHP/TS model file. */
+  private extractModelRelations(content: string): string[] {
+    const relations: string[] = [];
+    // PHP Eloquent
+    const phpMatches = content.matchAll(/function\s+(\w+)\(\).*(?:hasMany|hasOne|belongsTo|belongsToMany|morphTo|morphMany|morphOne)\b/g);
+    for (const m of phpMatches) relations.push(m[1]!);
+    // Also match return type hints
+    const phpReturnMatches = content.matchAll(/(hasMany|hasOne|belongsTo|belongsToMany)\(\s*(\w+)::class/g);
+    for (const m of phpReturnMatches) {
+      const rel = `${m[1]}:${m[2]}`;
+      if (!relations.includes(rel)) relations.push(rel);
+    }
+    return [...new Set(relations)].slice(0, 5);
+  }
+
+  /** Extract trait/concern names from a PHP/TS file. */
+  private extractTraits(content: string): string[] {
+    const traits: string[] = [];
+    const phpMatches = content.matchAll(/use\s+(\w+(?:Trait|Concern|able))/g);
+    for (const m of phpMatches) traits.push(m[1]!);
+    // Common Laravel traits
+    const commonTraits = ['SoftDeletes', 'HasFactory', 'Notifiable', 'HasApiTokens', 'HasUuids', 'HasUlids'];
+    for (const t of commonTraits) {
+      if (content.includes(t) && !traits.includes(t)) traits.push(t);
+    }
+    return traits.filter((t) => t !== 'HasFactory'); // HasFactory is noise
+  }
+
+  /** Parse Laravel/Express route files into structured routes. */
+  private parseRouteFile(content: string, stack: StackInfo): { method: string; path: string; handler: string }[] {
+    const routes: { method: string; path: string; handler: string }[] = [];
+
+    if (stack.framework === 'Laravel') {
+      // Route::get('/path', Handler::class)
+      const matches = content.matchAll(/Route::(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]\s*,\s*(\S+?)[\s)]/gi);
+      for (const m of matches) {
+        routes.push({
+          method: m[1]!.toUpperCase(),
+          path: m[2]!,
+          handler: m[3]!.replace('::class', '').replace(/\\/g, '').split(',')[0]!,
+        });
+      }
+      // Route::view
+      const viewMatches = content.matchAll(/Route::view\(\s*['"]([^'"]+)['"]\s*,\s*['"]([^'"]+)['"]/gi);
+      for (const m of viewMatches) {
+        routes.push({ method: 'GET', path: m[1]!, handler: `view:${m[2]}` });
+      }
+    } else {
+      // Express-style: app.get('/path', handler)
+      const matches = content.matchAll(/\.(get|post|put|patch|delete)\(\s*['"]([^'"]+)['"]/gi);
+      for (const m of matches) {
+        routes.push({ method: m[1]!.toUpperCase(), path: m[2]!, handler: '' });
+      }
+    }
+
+    return routes.slice(0, 30);
+  }
+
+  /** Group env vars by prefix for readable output. */
+  private groupEnvVars(vars: string[]): Record<string, string[]> {
+    const groups: Record<string, string[]> = {};
+    for (const v of vars) {
+      const prefix = v.split('_').slice(0, 1).join('_');
+      const group = ['APP', 'DB', 'MAIL', 'REDIS', 'CACHE', 'QUEUE', 'LOG', 'AWS', 'VITE', 'REVERB', 'STRIPE'].includes(prefix)
+        ? prefix
+        : 'Other';
+      if (!groups[group]) groups[group] = [];
+      groups[group]!.push(v);
+    }
+    return groups;
   }
 }
