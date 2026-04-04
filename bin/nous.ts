@@ -113,6 +113,75 @@ program
   });
 
 program
+  .command('scan')
+  .description('Analyze the codebase and populate the brain with project knowledge')
+  .option('--no-ai', 'Skip AI analysis, only use static detection')
+  .action(async (options: { ai: boolean }) => {
+    const { ProjectScanner } = await import('../src/scan/scanner.js');
+    const { OpenAIEmbeddingEngine } = await import('../src/embeddings/api.js');
+    const { FallbackEmbeddingEngine } = await import('../src/embeddings/fallback.js');
+
+    const { nousDir, db } = requireNous();
+    const config = loadConfig(nousDir);
+
+    const openaiKey = config.openai_api_key ?? process.env['OPENAI_API_KEY'];
+    const anthropicKey = config.anthropic_api_key ?? process.env['ANTHROPIC_API_KEY'];
+    const embeddings = openaiKey ? new OpenAIEmbeddingEngine(openaiKey) : new FallbackEmbeddingEngine();
+
+    const scanner = new ProjectScanner(db, embeddings, anthropicKey ?? undefined);
+
+    console.log('');
+    const result = await scanner.scan(process.cwd(), {
+      onProgress: (msg) => console.log(`  ${msg}`),
+      skipAi: !options.ai,
+    });
+
+    const { scan } = result;
+
+    // Print results
+    console.log('');
+    console.log('  ─────────────────────────────────────────');
+
+    if (scan.stack.languages.length) {
+      console.log(`  Languages:    ${scan.stack.languages.join(', ')}`);
+    }
+    if (scan.stack.framework) {
+      console.log(`  Framework:    ${scan.stack.framework} ${scan.stack.frameworkVersion ?? ''}`);
+    }
+    if (scan.stack.database.length) {
+      console.log(`  Database:     ${scan.stack.database.join(', ')}`);
+    }
+    console.log(`  Architecture: ${scan.architecture.pattern}`);
+
+    if (scan.entryPoints.length) {
+      console.log(`  Entry points: ${scan.entryPoints.map((e) => e.path).join(', ')}`);
+    }
+    if (scan.models.length) {
+      console.log(`  Models:       ${scan.models.length} (${scan.models.slice(0, 5).map((m) => m.name).join(', ')}${scan.models.length > 5 ? '...' : ''})`);
+    }
+    if (scan.routes.length) {
+      const total = scan.routes.reduce((sum, r) => sum + r.count, 0);
+      console.log(`  Routes:       ${total} across ${scan.routes.length} files`);
+    }
+    if (scan.migrations.length) {
+      console.log(`  Migrations:   ${scan.migrations.length}`);
+    }
+    if (scan.tests.fileCount > 0) {
+      console.log(`  Tests:        ${scan.tests.fileCount} files (${scan.tests.framework ?? 'unknown'})`);
+    }
+    if (scan.cicd.length) {
+      console.log(`  CI/CD:        ${scan.cicd.map((c) => c.name).join(', ')}`);
+    }
+
+    console.log('');
+    console.log(`  Brain: ${result.entriesCreated} entries created, ${result.relationshipsCreated} relationships`);
+    console.log(`  Run \`npx nousdb viz\` to explore the brain.`);
+    console.log('');
+
+    closeConnection();
+  });
+
+program
   .command('import [file]')
   .description('Import knowledge from project files. Without args: auto-detect CLAUDE.md, README, .cursorrules, ADRs. With file: import specific file.')
   .option('-t, --type <type>', 'File type hint: claude-md, readme, cursorrules, adr, generic-md')
